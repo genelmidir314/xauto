@@ -845,26 +845,19 @@ async function getDashboardStats(scheduleSettingsArg) {
 // =====================
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-app.get("/debug-auth", (req, res) => {
-  const ck = !!process.env.X_CONSUMER_KEY;
-  const cs = !!process.env.X_CONSUMER_SECRET;
-  const at = !!process.env.X_ACCESS_TOKEN;
-  const as = !!process.env.X_ACCESS_SECRET;
-  const bearer = !!process.env.X_USER_BEARER;
-  const oauth1a = ck && cs && at && as;
-  res.json({
-    oauth1a,
-    oauth1aVars: { consumerKey: ck, consumerSecret: cs, accessToken: at, accessSecret: as },
-    bearer: bearer,
-  });
-});
-
 app.get("/debug-counts", async (req, res) => {
   try {
+    const ck = !!process.env.X_CONSUMER_KEY;
+    const cs = !!process.env.X_CONSUMER_SECRET;
+    const at = !!process.env.X_ACCESS_TOKEN;
+    const as = !!process.env.X_ACCESS_SECRET;
+    const bearer = !!process.env.X_USER_BEARER;
+    const oauth1a = ck && cs && at && as;
+    const auth = { oauth1a, oauth1aVars: { consumerKey: ck, consumerSecret: cs, accessToken: at, accessSecret: as }, bearer };
     const counts = await getCounts();
     const dashboard = await getDashboardStats();
     const collectorMetrics = await getCollectorMetricsSummary(pool);
-    res.json({ ...counts, dashboard, collectorMetrics });
+    res.json({ auth, ...counts, dashboard, collectorMetrics });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
