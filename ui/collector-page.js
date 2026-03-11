@@ -166,6 +166,7 @@ function renderCollectorPage({ collectorMetrics, performanceRows, helpers, limit
     <div class="toolbar">
       <button class="btn btnSave" type="button" data-action="run-collector">Tweet Cek</button>
       <button class="btn btnSave" type="button" data-action="run-make-drafts">Draft Uret</button>
+      <button class="btn btnCancel" type="button" data-action="cancel-make-drafts">Draft Iptal</button>
       ${renderLimitPicker({ basePath: "/collector-ui", currentLimit: limit }, esc)}
     </div>
     <div id="collectorMessage" class="message"></div>

@@ -395,8 +395,17 @@ async function verifyOpenAIKey() {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch("https://api.openai.com/v1/models", {
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        max_tokens: 5,
+        messages: [{ role: "user", content: "Say OK" }],
+      }),
       signal: controller.signal,
     });
     clearTimeout(t);

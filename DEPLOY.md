@@ -137,18 +137,24 @@ Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir
 
 ### OPENAI_API_KEY (AI yorumlar)
 
+**Önemli:** Render `.env` dosyasını kullanmaz. Tüm ortam değişkenleri Render Dashboard → Environment üzerinden tanımlanmalıdır. Lokal `.env` içinde key olsa bile Render deploy'unda yoksa AI yorumlar çalışmaz.
+
 **Yorumlar AI ile üretilmiyorsa** (fallback kullanılıyorsa):
 
 1. Render → xauto → Environment → `OPENAI_API_KEY` ekleyin (OpenAI API key, `sk-...` ile başlar)
-2. Deploy sonrası make-drafts loglarında `✅ OPENAI_API_KEY geçerli` görünmeli
-3. `⚠️ OPENAI_API_KEY geçersiz (401)` → Key yanlış veya süresi dolmuş, yenileyin
-4. `⚠️ OpenAI attempt 1/3 failed` → Rate limit veya geçici hata, otomatik retry yapılır (max 3 deneme)
-5. Opsiyonel: `OPENAI_TIMEOUT_MS=45000` (varsayılan 45s), `OPENAI_MAX_RETRIES=3`
+2. **Save Changes** → **Manual Deploy** (değişikliklerin uygulanması için zorunlu)
+3. Deploy sonrası make-drafts loglarında `✅ OPENAI_API_KEY geçerli` görünmeli
+4. `⚠️ OPENAI_API_KEY geçersiz (401)` → Key yanlış veya süresi dolmuş, yenileyin
+5. `⚠️ OpenAI attempt 1/3 failed` → Rate limit veya geçici hata, otomatik retry yapılır (max 3 deneme)
+6. Opsiyonel: `OPENAI_TIMEOUT_MS=45000` (varsayılan 45s), `OPENAI_MAX_RETRIES=3`
+
+**Hızlı kontrol:** `curl https://xauto.onrender.com/openai-check` veya `/debug-counts` → `auth.openaiKey`
 
 ### Debug endpoint'leri
 
 - `/health` – `ok`, `posterWorkerRunning`, `posterWorkerRestartCount`
-- `/debug-counts` – İstatistikler + auth durumu + queue durumu (serverNow, waitingJobs, isDue)
+- `/debug-counts` – İstatistikler + auth durumu (`auth.openaiKey`) + queue durumu (serverNow, waitingJobs, isDue)
+- `/openai-check` – OpenAI key doğrulama (tanımlı mı, geçerli mi); Render Logs'a bakmadan durum kontrolü
 
 ## Sorun Giderme: Post Atılmıyor ("beklemede" Kalıyor)
 

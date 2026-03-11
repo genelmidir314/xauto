@@ -589,6 +589,19 @@ function renderCollectorClientScript() {
             setCollectorMessage(e.message || "Hata", "error");
             btn2.disabled = false;
           }
+          return;
+        }
+
+        const btnCancel = event.target.closest('[data-action="cancel-make-drafts"]');
+        if (btnCancel) {
+          btnCancel.disabled = true;
+          try {
+            const r = await sendJson("/cancel-make-drafts", {});
+            setCollectorMessage(r.message || "Make-drafts iptal edildi.", "success");
+          } catch (e) {
+            setCollectorMessage(e.message || "Hata", "error");
+          }
+          btnCancel.disabled = false;
         }
       });
     })();

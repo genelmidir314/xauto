@@ -888,6 +888,74 @@ app.get("/debug-counts", async (req, res) => {
   }
 });
 
+app.get("/openai-check", async (req, res) => {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key || !String(key).trim()) {
+    return res.json({
+      ok: false,
+      valid: false,
+      status: "missing",
+      message: "OPENAI_API_KEY tanımlı değil. Render → Environment → OPENAI_API_KEY ekleyin.",
+    });
+  }
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        max_tokens: 5,
+        messages: [{ role: "user", content: "Say OK" }],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    if (r.status === 401) {
+      return res.json({
+        ok: false,
+        valid: false,
+        status: "invalid",
+        message: "OPENAI_API_KEY geçersiz (401). Key yanlış veya süresi dolmuş olabilir.",
+      });
+    }
+    if (r.status === 429) {
+      return res.json({
+        ok: true,
+        valid: true,
+        status: "rate_limit",
+        message: "OpenAI rate limit (429). Geçici, retry ile devam edilebilir.",
+      });
+    }
+    if (!r.ok) {
+      const text = await r.text();
+      return res.json({
+        ok: false,
+        valid: false,
+        status: "error",
+        message: `OpenAI hata ${r.status}: ${text.slice(0, 200)}`,
+      });
+    }
+    return res.json({
+      ok: true,
+      valid: true,
+      status: "ok",
+      message: "OPENAI_API_KEY geçerli – AI yorumlar kullanılacak.",
+    });
+  } catch (e) {
+    return res.json({
+      ok: false,
+      valid: false,
+      status: "error",
+      message: `Doğrulama hatası: ${e?.message || e}`,
+    });
+  }
+});
+
 app.get("/collector-metrics", async (req, res) => {
   try {
     const collectorMetrics = await getCollectorMetricsSummary(pool);
@@ -1132,13 +1200,29 @@ app.post("/run-make-drafts", async (req, res) => {
     return res.status(409).json({ ok: false, error: "Make-drafts zaten calisiyor." });
   }
   makeDraftsRunning = true;
+  makeDraftsChild = null;
   res.json({ ok: true, message: "Make-drafts baslatildi. Tamamlaninca sayfayi yenileyin." });
-  runScript("make-drafts.js")
-    .then(() => { makeDraftsRunning = false; })
+  runScriptWithChild("make-drafts.js", (child) => { makeDraftsChild = child; })
+    .then(() => { makeDraftsRunning = false; makeDraftsChild = null; })
     .catch((err) => {
       makeDraftsRunning = false;
+      makeDraftsChild = null;
       console.error("Make-drafts hata:", err?.message || err);
     });
+});
+
+app.post("/cancel-make-drafts", (req, res) => {
+  if (!makeDraftsRunning || !makeDraftsChild) {
+    return res.json({ ok: true, message: "Make-drafts calismiyor." });
+  }
+  try {
+    makeDraftsChild.kill("SIGTERM");
+    makeDraftsChild = null;
+    makeDraftsRunning = false;
+    res.json({ ok: true, message: "Make-drafts iptal edildi." });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "Iptal basarisiz." });
+  }
 });
 
 app.get("/drafts", async (req, res) => {
@@ -1624,23 +1708,30 @@ app.get("/history", async (req, res) => {
 let posterWorkerChild = null;
 let collectorRunning = false;
 let makeDraftsRunning = false;
+let makeDraftsChild = null;
 let posterWorkerRestartCount = 0;
 const POSTER_WORKER_MAX_RESTARTS = 10;
 const POSTER_WORKER_RESTART_DELAY_MS = 5000;
 
 function runScript(scriptName) {
+  return runScriptWithChild(scriptName, null);
+}
+
+function runScriptWithChild(scriptName, onSpawn) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(__dirname, scriptName)], {
       stdio: ["ignore", "pipe", "pipe"],
       cwd: __dirname,
       env: { ...process.env, PATH: pathEnv },
     });
+    if (typeof onSpawn === "function") onSpawn(child);
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (d) => { stdout += d.toString(); });
     child.stderr?.on("data", (d) => { stderr += d.toString(); });
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       if (code === 0) resolve({ stdout, stderr });
+      else if (child.killed || signal === "SIGTERM") resolve({ stdout, stderr });
       else reject(new Error(stderr || stdout || `Exit code ${code}`));
     });
     child.on("error", reject);
