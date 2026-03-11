@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>XAuto Inbox</title>
+  <style>
+    :root{
+      --bg:#0b0d12; --card:#111522; --muted:#9aa4b2; --text:#e7ecf3;
+      --line:rgba(255,255,255,.08);
+      --green:#22c55e; --red:#ef4444; --blue:#3b82f6; --amber:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto;background:var(--bg);color:var(--text)}
+    a{color:#93c5fd;text-decoration:none}
+    .wrap{max-width:1150px;margin:22px auto;padding:0 14px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    h1{margin:0;font-size:26px}
+    .nav{display:flex;gap:10px;flex-wrap:wrap}
+    .pill{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:8px 10px;border-radius:999px;font-size:13px;cursor:pointer}
+    .pill.active{outline:2px solid rgba(59,130,246,.35)}
+    .btn{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:10px 12px;border-radius:12px;font-weight:700;cursor:pointer}
+    .btn.green{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.35)}
+    .btn.red{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35)}
+    .btn.blue{background:rgba(59,130,246,.14);border-color:rgba(59,130,246,.35)}
+    .btn.amber{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.35)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .hint{color:var(--muted);font-size:13px}
+
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .list{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+    .card{border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:18px;padding:14px}
+    .head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .id{font-weight:900;font-size:18px}
+    .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}}
+    .box{border:1px solid var(--line);background:rgba(0,0,0,.18);border-radius:14px;padding:12px}
+    .label{font-size:12px;color:var(--muted);margin-bottom:8px}
+    .preview{white-space:pre-wrap;line-height:1.35}
+    textarea{width:100%;min-height:88px;resize:vertical;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--text);padding:10px;font-size:14px;line-height:1.35}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px}
+    .count{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin-top:8px}
+    .warn{color:#fca5a5}
+    .ok{color:#86efac}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#0b1220;border:1px solid var(--line);padding:10px 12px;border-radius:12px;color:var(--text);display:none}
+    .toast.show{display:block}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>XAuto Inbox</h1>
+      <div class="nav">
+        <a class="pill" href="/queue-ui">Queue UI</a>
+        <a class="pill" href="/history-ui">History UI</a>
+        <a class="pill" href="/debug-counts">Debug</a>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="pill" data-status="pending">Pending</button>
+      <button class="pill" data-status="approved">Approved</button>
+      <button class="pill" data-status="queued">Queued</button>
+      <button class="pill" data-status="rejected">Rejected</button>
+      <button class="pill" data-status="posted">Posted</button>
+
+      <div style="flex:1"></div>
+
+      <button id="refresh" class="btn">Yenile</button>
+      <span class="hint" id="meta">—</span>
+    </div>
+
+    <div class="list" id="list"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  const listEl = document.getElementById("list");
+  const metaEl = document.getElementById("meta");
+  const toastEl = document.getElementById("toast");
+  const refreshBtn = document.getElementById("refresh");
+  const statusBtns = [...document.querySelectorAll("[data-status]")];
+
+  let currentStatus = new URLSearchParams(location.search).get("status") || "pending";
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    setTimeout(()=>toastEl.classList.remove("show"), 1500);
+  }
+
+  function esc(s){
+    return String(s||"")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+
+  function compose(comment, tr){
+    comment = (comment || "").trim();
+    tr = (tr || "").trim();
+    if(comment && tr) return comment + "\\n\\n" + tr;
+    return comment || tr || "";
+  }
+
+  function renderCard(item){
+    const xUrl = item.tweet_id ? `https://x.com/${item.source_handle || "i"}/status/${item.tweet_id}` : null;
+    const finalText = compose(item.comment_tr, item.translation_tr);
+    const len = finalText.length;
+
+    return `
+      <div class="card" data-id="${item.draft_id}">
+        <div class="head">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div class="id">ID: ${item.draft_id}</div>
+            <span class="badge">${item.draft_status}</span>
+          </div>
+          <div class="meta">
+            <span>tweet_id: <b class="mono">${esc(item.tweet_id || "-")}</b></span>
+            <span>kaynak: <b>@${esc(item.source_handle || "?")}</b></span>
+            ${xUrl ? `<a class="pill" target="_blank" rel="noreferrer" href="${xUrl}">X link</a>` : ""}
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <div class="label">Orijinal Tweet</div>
+            <div class="preview">${esc(item.source_text || "(tweet bulunamadı)")}</div>
+          </div>
+
+          <div class="box">
+            <div class="label">Final Önizleme (yorum + çeviri)</div>
+            <div class="preview mono" id="prev_${item.draft_id}">${esc(finalText || "(boş)")}</div>
+            <div class="count">
+              <span class="${len>280 ? "warn":"ok"}">Karakter: <b id="cnt_${item.draft_id}">${len}</b> / 280</span>
+              <span class="hint">280+ olursa Queue olmaz</span>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="label">TR Çeviri (düzenle)</div>
+            <textarea id="tr_${item.draft_id}" placeholder="Türkçe çeviri...">${esc(item.translation_tr || "")}</textarea>
+          </div>
+
+          <div class="box">
+            <div class="label">Yorum (düzenle)</div>
+            <textarea id="cm_${item.draft_id}" placeholder="1 cümle yorum...">${esc(item.comment_tr || "")}</textarea>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn blue" data-act="save">Save</button>
+          <button class="btn green" data-act="approve">Approve</button>
+          <button class="btn red" data-act="reject">Reject</button>
+          <button class="btn amber" data-act="queue">Queue</button>
+          <span class="hint" id="msg_${item.draft_id}"></span>
+        </div>
+      </div>
+    `;
+  }
+
+  async function load(){
+    metaEl.textContent = "Yükleniyor…";
+    listEl.innerHTML = "";
+    const r = await fetch(`/api/inbox?status=${encodeURIComponent(currentStatus)}&limit=50`);
+    const j = await r.json();
+    if(!j.ok){
+      metaEl.textContent = "Hata: " + (j.error || "unknown");
+      return;
+    }
+    metaEl.textContent = `status=${j.status} | ${j.items.length} kayıt`;
+    if(j.items.length === 0){
+      listEl.innerHTML = `<div class="card"><div class="hint">Bu statüde kayıt yok: <b>${j.status}</b></div></div>`;
+      return;
+    }
+    listEl.innerHTML = j.items.map(renderCard).join("");
+
+    // live preview updates
+    j.items.forEach(it=>{
+      const tr = document.getElementById(`tr_${it.draft_id}`);
+      const cm = document.getElementById(`cm_${it.draft_id}`);
+      const prev = document.getElementById(`prev_${it.draft_id}`);
+      const cnt = document.getElementById(`cnt_${it.draft_id}`);
+
+      const update = ()=>{
+        const text = compose(cm.value, tr.value);
+        prev.textContent = text || "(boş)";
+        cnt.textContent = (text||"").length;
+        cnt.parentElement.className = (text||"").length > 280 ? "warn" : "ok";
+      };
+
+      tr.addEventListener("input", update);
+      cm.addEventListener("input", update);
+    });
+  }
+
+  async function patchDraft(id, body){
+    const r = await fetch(`/api/drafts/${id}`, {
+      method: "PATCH",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    return r.json();
+  }
+
+  async function queueDraft(id){
+    const r = await fetch(`/api/queue`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ draft_id: id })
+    });
+    return r.json();
+  }
+
+  listEl.addEventListener("click", async (e)=>{
+    const btn = e.target.closest("button[data-act]");
+    if(!btn) return;
+
+    const card = e.target.closest(".card");
+    const id = Number(card.dataset.id);
+
+    const tr = document.getElementById(`tr_${id}`).value;
+    const cm = document.getElementById(`cm_${id}`).value;
+
+    const text = compose(cm, tr);
+    if(btn.dataset.act === "queue" && text.length > 280){
+      toast("280 karakteri aştı. Kısaltıp tekrar dene.");
+      return;
+    }
+
+    btn.disabled = true;
+    try{
+      const act = btn.dataset.act;
+
+      if(act === "save"){
+        const j = await patchDraft(id, { translation_tr: tr, comment_tr: cm });
+        if(!j.ok) throw new Error(j.error || "save failed");
+        toast(`Saved #${id}`);
+      }
+
+      if(act === "approve"){
+        const j = await patchDraft(id, { translation_tr: tr, comment_tr: cm, status: "approved" });
+        if(!j.ok) throw new Error(j.error || "approve failed");
+        toast(`Approved #${id}`);
+        await load();
+      }
+
+      if(act === "reject"){
+        const j = await patchDraft(id, { translation_tr: tr, comment_tr: cm, status: "rejected" });
+        if(!j.ok) throw new Error(j.error || "reject failed");
+        toast(`Rejected #${id}`);
+        await load();
+      }
+
+      if(act === "queue"){
+        // önce draft'ı queued yap + kaydet
+        const j1 = await patchDraft(id, { translation_tr: tr, comment_tr: cm, status: "queued" });
+        if(!j1.ok) throw new Error(j1.error || "draft queued failed");
+
+        // sonra queue'ya ekle
+        const j2 = await queueDraft(id);
+        if(!j2.ok) throw new Error(j2.error || "queue insert failed");
+
+        toast(j2.alreadyQueued ? `Zaten queue'daydı #${id}` : `Queued #${id}`);
+        await load();
+      }
+    } catch(err){
+      toast("Hata: " + err.message);
+    } finally{
+      btn.disabled = false;
+    }
+  });
+
+  statusBtns.forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      statusBtns.forEach(x=>x.classList.remove("active"));
+      b.classList.add("active");
+      currentStatus = b.dataset.status;
+      history.replaceState(null,"",`/inbox?status=${encodeURIComponent(currentStatus)}`);
+      await load();
+    });
+  });
+
+  refreshBtn.addEventListener("click", load);
+
+  // init
+  statusBtns.forEach(x=>x.classList.toggle("active", x.dataset.status === currentStatus));
+  load();
+</script>
+</body>
+</html>
