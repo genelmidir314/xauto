@@ -498,27 +498,39 @@ async function tickOnce() {
   }
 }
 
-// ✅ TEK WORKER KİLİDİ: aynı DB’de aynı anda 2 worker çalıştırmayı engeller
+// ✅ TEK WORKER KİLİDİ: aynı DB'de aynı anda 2 worker çalıştırmayı engeller
+// Deploy sonrası eski process'in lock'u PostgreSQL tarafından temizlenene kadar retry
+const LOCK_KEY = 909090;
+const LOCK_MAX_RETRIES = 5;
+const LOCK_RETRY_DELAY_MS = 5000;
+
 async function acquireSingletonLock() {
-  const client = await pool.connect();
-  try {
-    // Sabit bir sayı: bu projeye özel lock key
-    const LOCK_KEY = 909090; 
-    const r = await client.query(`SELECT pg_try_advisory_lock($1) AS ok`, [LOCK_KEY]);
-    const ok = r.rows?.[0]?.ok === true;
+  for (let attempt = 1; attempt <= LOCK_MAX_RETRIES; attempt++) {
+    const client = await pool.connect();
+    try {
+      const r = await client.query(`SELECT pg_try_advisory_lock($1) AS ok`, [LOCK_KEY]);
+      const ok = r.rows?.[0]?.ok === true;
 
-    if (!ok) {
-      console.error("❌ Başka bir poster-worker zaten çalışıyor (advisory lock alınamadı). Çıkıyorum.");
-      process.exit(2); // 2 = lock failed, yeniden başlatma (başka instance çalışıyor)
+      if (ok) {
+        console.log("🔒 Singleton lock alındı. (Tek worker çalışacak)");
+        return client;
+      }
+
+      client.release();
+      if (attempt < LOCK_MAX_RETRIES) {
+        console.log(
+          `⏳ Lock alınamadı (deploy sonrası olabilir). ${LOCK_RETRY_DELAY_MS / 1000}s sonra tekrar (${attempt}/${LOCK_MAX_RETRIES})`
+        );
+        await sleep(LOCK_RETRY_DELAY_MS);
+      }
+    } catch (e) {
+      client.release();
+      throw e;
     }
-
-    console.log("🔒 Singleton lock alındı. (Tek worker çalışacak)");
-    // client'ı serbest bırakmıyoruz; lock session boyunca kalsın diye açık tutuyoruz.
-    return client;
-  } catch (e) {
-    client.release();
-    throw e;
   }
+
+  console.error("❌ Başka bir poster-worker zaten çalışıyor (advisory lock alınamadı). Çıkıyorum.");
+  process.exit(2);
 }
 
 async function main() {
