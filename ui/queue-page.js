@@ -170,7 +170,9 @@ function renderQueuePage({ rows, dashboard, helpers, limit }) {
     </div>
   `;
 
-  return renderPageShell("Queue UI", body, renderQueueClientScript());
+  return renderPageShell("Queue UI", body, renderQueueClientScript(), {
+    writeTokenRequired: !!helpers.writeTokenRequired,
+  });
 }
 
 module.exports = {

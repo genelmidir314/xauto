@@ -196,7 +196,9 @@ function renderSourcesPage({ sources, tierCheckIntervals, collectorMetrics, help
     ${renderSourcesCard(sources, tierCheckIntervals, helpers)}
   `;
 
-  return renderPageShell("Sources UI", body, renderSourcesClientScript());
+  return renderPageShell("Sources UI", body, renderSourcesClientScript(), {
+    writeTokenRequired: !!helpers.writeTokenRequired,
+  });
 }
 
 module.exports = {

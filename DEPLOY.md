@@ -126,6 +126,15 @@ Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir
 - URL: `https://xauto.onrender.com/health`
 - Interval: 5 dakika
 
+### XAUTO_ADMIN_TOKEN (uzaktan yazma)
+
+**"Yazma işlemleri sadece localhost'tan kabul edilir"** hatası alıyorsanız:
+
+1. Render → Environment → `XAUTO_ADMIN_TOKEN` ekleyin (güçlü rastgele string, örn. `openssl rand -hex 24`)
+2. Deploy sonrası UI'da sayfa üstünde "Uzaktan erişim" alanı görünür
+3. Token'ı yapıştırıp **Kaydet**'e tıklayın
+4. Tweet Çek, Draft Üret vb. artık çalışır
+
 ### OPENAI_API_KEY (AI yorumlar)
 
 **Yorumlar AI ile üretilmiyorsa** (fallback kullanılıyorsa):

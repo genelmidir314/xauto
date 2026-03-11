@@ -113,7 +113,56 @@ const BASE_STYLES = `
   .settingsHelp { font-size:12px; opacity:.78; }
 `;
 
-function renderPageShell(title, body, scripts = "") {
+const ADMIN_TOKEN_SCRIPT = `
+<script>
+(function(){
+  var k='xauto_admin_token';
+  var orig=window.fetch;
+  window.fetch=function(url,opts){
+    opts=opts||{};
+    if((opts.method||'GET').toUpperCase()==='POST'){
+      var t=sessionStorage.getItem(k);
+      if(t){
+        opts.headers=opts.headers||{};
+        if(opts.headers instanceof Headers) opts.headers.set('X-Admin-Token',t);
+        else if(typeof opts.headers==='object') opts.headers['X-Admin-Token']=t;
+      }
+    }
+    return orig.apply(this,arguments);
+  };
+  document.addEventListener('DOMContentLoaded',function(){
+    var f=document.getElementById('adminTokenForm');
+    var i=document.getElementById('adminTokenInput');
+    if(!f||!i) return;
+    var s=sessionStorage.getItem(k);
+    if(s) i.placeholder='Token kayitli';
+    f.onsubmit=function(e){
+      e.preventDefault();
+      var v=(i.value||'').trim();
+      if(v){ sessionStorage.setItem(k,v); i.value=''; i.placeholder='Token kaydedildi'; }
+      return false;
+    };
+  });
+})();
+</script>`;
+
+function renderAdminTokenBanner(writeTokenRequired, esc) {
+  if (!writeTokenRequired) return "";
+  return `
+    <div class="adminTokenBanner" style="margin-bottom:14px;padding:10px 14px;border-radius:12px;background:rgba(255,200,90,.08);border:1px solid rgba(255,200,90,.25);">
+      <form id="adminTokenForm" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span class="muted" style="font-size:12px;">Uzaktan erisim (Tweet Cek, Draft Uret vb.):</span>
+        <input id="adminTokenInput" type="password" placeholder="Admin token girin" autocomplete="off"
+          style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.3);color:#e9eef6;min-width:180px;font-size:13px;" />
+        <button type="submit" class="btn btnSave" style="padding:8px 14px;">Kaydet</button>
+      </form>
+    </div>`;
+}
+
+function renderPageShell(title, body, scripts = "", options = {}) {
+  const writeTokenRequired = !!options.writeTokenRequired;
+  const tokenBanner = renderAdminTokenBanner(writeTokenRequired, (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"));
+  const tokenScript = writeTokenRequired ? ADMIN_TOKEN_SCRIPT : "";
   return `
 <!doctype html>
 <html lang="tr">
@@ -125,9 +174,11 @@ function renderPageShell(title, body, scripts = "") {
   <meta http-equiv="Expires" content="0" />
   <title>${title}</title>
   <style>${BASE_STYLES}</style>
+  ${tokenScript}
 </head>
 <body>
   <div class="wrap">
+    ${tokenBanner}
     ${body}
   </div>
   ${scripts}

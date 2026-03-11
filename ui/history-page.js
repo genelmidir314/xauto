@@ -94,7 +94,9 @@ function renderHistoryPage({ rows, helpers, limit }) {
     </div>
   `;
 
-  return renderPageShell("History UI", body);
+  return renderPageShell("History UI", body, "", {
+    writeTokenRequired: !!helpers.writeTokenRequired,
+  });
 }
 
 module.exports = {

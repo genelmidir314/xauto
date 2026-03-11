@@ -174,7 +174,9 @@ function renderCollectorPage({ collectorMetrics, performanceRows, helpers, limit
     ${renderSourcePerformanceCard(performanceRows, helpers)}
   `;
 
-  return renderPageShell("Collector UI", body, renderCollectorClientScript());
+  return renderPageShell("Collector UI", body, renderCollectorClientScript(), {
+    writeTokenRequired: !!helpers.writeTokenRequired,
+  });
 }
 
 module.exports = {

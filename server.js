@@ -773,6 +773,7 @@ const uiHelpers = {
   composePreview,
   formatDateTR,
   mediaHtml,
+  writeTokenRequired: !!WRITE_ACCESS_TOKEN,
 };
 
 function normalizeInboxFilters(query = {}) {

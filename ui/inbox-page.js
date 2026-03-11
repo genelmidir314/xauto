@@ -560,7 +560,8 @@ function renderInboxPage({
   return renderPageShell(
     "XAuto Inbox",
     body,
-    renderInboxClientScript(status, queueView)
+    renderInboxClientScript(status, queueView),
+    { writeTokenRequired: !!helpers.writeTokenRequired }
   );
 }
 
