@@ -225,13 +225,14 @@ async function xPostTweet(text, mediaIds = []) {
 
   const headers = { "Content-Type": "application/json" };
 
-  if (hasOAuth2UserToken()) {
-    headers["Authorization"] = `Bearer ${X_USER_BEARER}`;
-  } else if (hasOAuth1a()) {
+  // OAuth 1a öncelikli: Bearer (App-Only) post atmaya yetmez, 403 döner
+  if (hasOAuth1a()) {
     headers["Authorization"] = buildOAuth1Header("POST", url);
+  } else if (hasOAuth2UserToken()) {
+    headers["Authorization"] = `Bearer ${X_USER_BEARER}`;
   } else {
     throw new Error(
-      "X auth yok: Tweet atmak için X_USER_BEARER veya OAuth1a gerekli."
+      "X auth yok: Tweet atmak için OAuth1a (X_CONSUMER_KEY/.../X_ACCESS_SECRET) veya X_USER_BEARER gerekli."
     );
   }
 
@@ -532,8 +533,12 @@ async function main() {
     )} | minInterval=${scheduleSettings.minPostIntervalMinutes}m`
   );
 
-  if (!hasOAuth2UserToken() && !hasOAuth1a()) {
-    console.log("⚠️ Tweet atmak için user-auth gerekli. X_USER_BEARER veya OAuth1a env'lerini gir.");
+  if (!hasOAuth1a() && !hasOAuth2UserToken()) {
+    console.log("⚠️ Tweet atmak için OAuth1a (X_CONSUMER_KEY/.../X_ACCESS_SECRET) veya X_USER_BEARER gerekli.");
+  } else if (hasOAuth1a()) {
+    console.log("✅ Post auth: OAuth 1.0a (önerilen)");
+  } else {
+    console.log("✅ Post auth: Bearer (OAuth 2.0 User Context gerekli, App-Only yetmez)");
   }
 
   // ✅ lock
