@@ -1238,6 +1238,11 @@ app.get("/drafts", async (req, res) => {
       ? [status, status, pendingMedia, limit, sourcePattern]
       : [status, status, pendingMedia, limit];
 
+    const orderBy =
+      status === "approved"
+        ? "ORDER BY q.scheduled_at ASC NULLS LAST, d.id DESC"
+        : "ORDER BY COALESCE(d.viral_score,0) DESC, d.id DESC";
+
     const r = await pool.query(
       `
       SELECT
@@ -1280,7 +1285,7 @@ app.get("/drafts", async (req, res) => {
             )
           )
         )${sourceCondition}
-      ORDER BY COALESCE(d.viral_score,0) DESC, d.id DESC
+      ${orderBy}
       LIMIT $4
       `,
       params
@@ -1498,6 +1503,11 @@ app.get(["/", "/inbox"], async (req, res) => {
       ? [status, status, pendingMedia, limit, sourcePattern]
       : [status, status, pendingMedia, limit];
 
+    const orderBy =
+      status === "approved"
+        ? "ORDER BY q.scheduled_at ASC NULLS LAST, d.id DESC"
+        : "ORDER BY COALESCE(d.viral_score,0) DESC, d.id DESC";
+
     const r = await pool.query(
       `
       SELECT
@@ -1540,7 +1550,7 @@ app.get(["/", "/inbox"], async (req, res) => {
             )
           )
         )${sourceCondition}
-      ORDER BY COALESCE(d.viral_score,0) DESC, d.id DESC
+      ${orderBy}
       LIMIT $4
       `,
       params
