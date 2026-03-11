@@ -55,6 +55,7 @@ cp .env.example .env
 ```
 
 Zorunlu: `DATABASE_URL`, `X_USER_BEARER`  
+**AI yorumlar için:** `OPENAI_API_KEY` (yoksa fallback yorumlar kullanılır)  
 Video için: `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_SECRET`  
 Gerçek post için: `WORKER_DRY_RUN=false`
 
@@ -124,6 +125,14 @@ Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir
 - https://uptimerobot.com → Add Monitor
 - URL: `https://xauto.onrender.com/health`
 - Interval: 5 dakika
+
+### OPENAI_API_KEY (AI yorumlar)
+
+**Yorumlar AI ile üretilmiyorsa** (fallback kullanılıyorsa):
+
+1. Render → xauto → Environment → `OPENAI_API_KEY` ekleyin (OpenAI API key)
+2. Deploy sonrası `https://xauto.onrender.com/debug-counts` → `auth.openaiKey: true` olmalı
+3. make-drafts loglarında `✅ OPENAI_API_KEY SET` görünmeli; `⚠️ OPENAI_API_KEY YOK` görürseniz key eksik
 
 ### Debug endpoint'leri
 

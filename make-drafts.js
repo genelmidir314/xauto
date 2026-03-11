@@ -5,7 +5,10 @@ const { ensureTweetMediaValidationSchema } = require("./tweet-media-validation")
 const {
   COMMENT_TRANSLATION_FORMAT_KEY,
   COMMENT_TRANSLATION_SOURCE_LINK_FORMAT_KEY,
+  composeDraftText,
 } = require("./draft-format");
+
+const MAX_TWEET_LENGTH = 280;
 
 if (!process.env.DATABASE_URL) {
   console.error("❌ DATABASE_URL yok");
@@ -288,13 +291,72 @@ ${mediaHint}
     return out;
   } catch (e) {
     console.log("⚠️ OpenAI yorum exception:", e.message);
+    console.log("   (Detay: " + (e.cause?.message || e.stack?.split("\n")[0] || "") + ")");
     return fallbackComment(sourceHandle, cleanOriginal);
+  }
+}
+
+/**
+ * Yorum + çeviri 280 karakteri geçiyorsa OpenAI ile kısaltır.
+ * @returns {{ commentTr: string, translationTr: string }}
+ */
+async function shortenDraftToFit(commentTr, translationTr, formatKey, xUrl) {
+  const composed = composeDraftText(commentTr, translationTr, formatKey, xUrl);
+  if (composed.length <= MAX_TWEET_LENGTH) {
+    return { commentTr, translationTr };
+  }
+
+  if (!OPENAI_API_KEY) {
+    console.log("⚠️ OPENAI_API_KEY yok, kısaltma yapılamadı. Orijinal kullanılacak.");
+    return { commentTr, translationTr };
+  }
+
+  try {
+    const out = await openaiChat(
+      `You shorten Turkish tweets to fit within ${MAX_TWEET_LENGTH} characters (Twitter limit).
+
+Rules:
+- Keep the structure: first line = short comment/question, blank line, then main content
+- Preserve meaning and tone
+- If there is a URL at the end, keep it unchanged
+- Output format: COMMENT\\n\\nTRANSLATION or COMMENT\\n\\nTRANSLATION\\n\\nURL
+- Output ONLY the shortened tweet, no explanations`,
+      `Shorten this tweet to max ${MAX_TWEET_LENGTH} characters:\n\n${composed}`,
+      0.3
+    );
+
+    const parts = out.split(/\n\n+/);
+    let newComment = commentTr;
+    let newTranslation = translationTr;
+
+    if (parts.length >= 2) {
+      newComment = parts[0].trim();
+      newTranslation = parts.slice(1).join("\n\n").trim();
+    } else if (parts.length === 1) {
+      newTranslation = parts[0].trim();
+    }
+
+    const shortened = composeDraftText(newComment, newTranslation, formatKey, xUrl);
+    if (shortened.length > MAX_TWEET_LENGTH) {
+      console.log("⚠️ OpenAI kısaltma yeterli değil, orijinal kullanılıyor.");
+      return { commentTr, translationTr };
+    }
+
+    console.log(`OPENAI RESULT [shorten]: ${composed.length} -> ${shortened.length} karakter`);
+    return { commentTr: newComment, translationTr: newTranslation };
+  } catch (e) {
+    console.log("⚠️ OpenAI kısaltma exception:", e.message);
+    return { commentTr, translationTr };
   }
 }
 
 async function run() {
   console.log("🚀 make-drafts başladı");
-  console.log(`OPENAI_API_KEY len=${OPENAI_API_KEY.length || 0}`);
+  if (OPENAI_API_KEY) {
+    console.log("✅ OPENAI_API_KEY SET – yorumlar AI ile üretilecek");
+  } else {
+    console.log("⚠️ OPENAI_API_KEY YOK – yorumlar fallback ile üretilecek (Render'da Environment'a ekleyin)");
+  }
   await ensureTweetMediaValidationSchema(pool);
 
   const candidates = await pool.query(
@@ -363,12 +425,21 @@ async function run() {
       : COMMENT_TRANSLATION_FORMAT_KEY;
 
     const translationTr = await translateToTurkish(originalText);
-    const commentTr = await generateComment(
+    let commentTr = await generateComment(
       sourceHandle,
       originalText,
       translationTr,
       hasMedia
     );
+    const xUrl = String(row.x_url || "").trim();
+    const shortened = await shortenDraftToFit(
+      commentTr,
+      translationTr,
+      draftFormatKey,
+      xUrl
+    );
+    commentTr = shortened.commentTr;
+    const finalTranslationTr = shortened.translationTr;
     await pool.query(
       `
       INSERT INTO drafts
@@ -378,7 +449,7 @@ async function run() {
       [
         tweetId,
         commentTr,
-        translationTr,
+        finalTranslationTr,
         draftFormatKey,
         "pending",
         viral.score,
