@@ -111,6 +111,25 @@ Caddy ile:
 reverse_proxy localhost:3000
 ```
 
+## Render Özel Ayarlar
+
+### TZ (Türkiye saati)
+
+Environment Variables'a ekle: `TZ=Europe/Istanbul`
+
+### Uyku modunu önleme (Free tier)
+
+Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir ping at:
+
+- https://uptimerobot.com → Add Monitor
+- URL: `https://xauto.onrender.com/health`
+- Interval: 5 dakika
+
+### Debug endpoint'leri
+
+- `/debug-counts` – İstatistikler + auth durumu
+- `/debug-queue` – Kuyruk durumu, sıradaki job'lar, server saati
+
 ## Kontrol Listesi
 
 - [ ] `WORKER_DRY_RUN=false` (.env)

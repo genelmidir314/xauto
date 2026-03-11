@@ -303,6 +303,19 @@ async function takeOneDueJob() {
     );
 
     if (q.rowCount === 0) {
+      const countRes = await client.query(
+        `SELECT COUNT(*) AS c FROM queue WHERE status='waiting'`
+      );
+      const waitingCount = countRes.rows?.[0]?.c ?? 0;
+      if (waitingCount > 0) {
+        const sample = await client.query(
+          `SELECT id, draft_id, scheduled_at FROM queue WHERE status='waiting' ORDER BY scheduled_at ASC LIMIT 1`
+        );
+        const s = sample.rows?.[0];
+        console.log(
+          `⏳ Due job yok. now=${now.toISOString()} waiting=${waitingCount} en_yakın_scheduled=${s?.scheduled_at || "?"}`
+        );
+      }
       await client.query("COMMIT");
       return null;
     }
