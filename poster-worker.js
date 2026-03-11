@@ -501,8 +501,8 @@ async function tickOnce() {
 // ✅ TEK WORKER KİLİDİ: aynı DB'de aynı anda 2 worker çalıştırmayı engeller
 // Deploy sonrası eski process'in lock'u PostgreSQL tarafından temizlenene kadar retry
 const LOCK_KEY = 909090;
-const LOCK_MAX_RETRIES = 5;
-const LOCK_RETRY_DELAY_MS = 5000;
+const LOCK_MAX_RETRIES = 15;
+const LOCK_RETRY_DELAY_MS = 10000;
 
 async function acquireSingletonLock() {
   for (let attempt = 1; attempt <= LOCK_MAX_RETRIES; attempt++) {
