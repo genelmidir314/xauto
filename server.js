@@ -845,29 +845,6 @@ async function getDashboardStats(scheduleSettingsArg) {
 // =====================
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-app.get("/debug-queue", async (req, res) => {
-  try {
-    const now = new Date();
-    const r = await pool.query(
-      `SELECT id, draft_id, scheduled_at, status FROM queue WHERE status='waiting' ORDER BY scheduled_at ASC LIMIT 3`
-    );
-    const jobs = r.rows.map((row) => ({
-      ...row,
-      isDue: new Date(row.scheduled_at).getTime() <= now.getTime(),
-      scheduledAtISO: row.scheduled_at,
-    }));
-    res.json({
-      serverNow: now.toISOString(),
-      serverNowTR: now.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }),
-      TZ: process.env.TZ || "(not set)",
-      waitingJobs: jobs,
-      waitingCount: r.rowCount,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.get("/debug-counts", async (req, res) => {
   try {
     const ck = !!process.env.X_CONSUMER_KEY;
@@ -880,7 +857,22 @@ app.get("/debug-counts", async (req, res) => {
     const counts = await getCounts();
     const dashboard = await getDashboardStats();
     const collectorMetrics = await getCollectorMetricsSummary(pool);
-    res.json({ auth, ...counts, dashboard, collectorMetrics });
+
+    const now = new Date();
+    const queueR = await pool.query(
+      `SELECT id, draft_id, scheduled_at, status FROM queue WHERE status='waiting' ORDER BY scheduled_at ASC LIMIT 3`
+    );
+    const queueDebug = {
+      serverNow: now.toISOString(),
+      serverNowTR: now.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }),
+      TZ: process.env.TZ || "(not set)",
+      waitingJobs: queueR.rows.map((row) => ({
+        ...row,
+        isDue: new Date(row.scheduled_at).getTime() <= now.getTime(),
+      })),
+    };
+
+    res.json({ auth, queueDebug, ...counts, dashboard, collectorMetrics });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

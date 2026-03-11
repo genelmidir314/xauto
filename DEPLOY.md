@@ -127,8 +127,7 @@ Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir
 
 ### Debug endpoint'leri
 
-- `/debug-counts` – İstatistikler + auth durumu
-- `/debug-queue` – Kuyruk durumu, sıradaki job'lar, server saati
+- `/debug-counts` – İstatistikler + auth durumu + queue durumu (serverNow, waitingJobs, isDue)
 
 ## Kontrol Listesi
 
