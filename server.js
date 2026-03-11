@@ -176,6 +176,7 @@ function formatDateTR(dateValue) {
   if (!dateValue) return "-";
   const d = new Date(dateValue);
   return d.toLocaleString("tr-TR", {
+    timeZone: "Europe/Istanbul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

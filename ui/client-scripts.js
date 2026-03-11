@@ -84,10 +84,10 @@ function renderSourceManagementScriptBody() {
         if (category && data.category !== undefined) category.value = data.category || "";
         if (active && data.active !== undefined) active.checked = !!data.active;
         if (nextCheck && data.next_check_at) {
-          nextCheck.textContent = new Date(data.next_check_at).toLocaleString("tr-TR");
+          nextCheck.textContent = new Date(data.next_check_at).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" });
         }
         if (lastCheck && data.last_checked_at) {
-          lastCheck.textContent = new Date(data.last_checked_at).toLocaleString("tr-TR");
+          lastCheck.textContent = new Date(data.last_checked_at).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" });
         }
       }
 
