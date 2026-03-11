@@ -113,6 +113,17 @@ function inspectStoredMedia(media) {
     };
   }
 
+  const durationMs = Number(videoLike.duration_ms || 0);
+  const MAX_VIDEO_MS = 120000; // 2 dakika - X ücretsiz hesap limiti
+  if (durationMs > MAX_VIDEO_MS) {
+    return {
+      ok: false,
+      hasMedia: true,
+      candidate: null,
+      error: `Video 2 dakikadan uzun (${Math.round(durationMs / 1000)}sn). X ücretsiz hesaplar max 2 dk video paylaşabilir.`,
+    };
+  }
+
   const bestVariant = pickBestMp4Variant(videoLike.variants);
   if (!bestVariant?.url) {
     return {
