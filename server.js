@@ -843,7 +843,13 @@ async function getDashboardStats(scheduleSettingsArg) {
 // =====================
 // ROUTES
 // =====================
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/health", (req, res) =>
+  res.json({
+    ok: true,
+    posterWorkerRunning: !!posterWorkerChild,
+    posterWorkerRestartCount,
+  })
+);
 
 app.get("/debug-counts", async (req, res) => {
   try {
@@ -867,6 +873,8 @@ app.get("/debug-counts", async (req, res) => {
       serverNow: now.toISOString(),
       serverNowTR: now.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }),
       TZ: process.env.TZ || "(not set)",
+      posterWorkerRunning: !!posterWorkerChild,
+      posterWorkerRestartCount,
       waitingJobs: queueR.rows.map((row) => ({
         ...row,
         isDue: new Date(row.scheduled_at).getTime() <= now.getTime(),
@@ -1615,6 +1623,9 @@ app.get("/history", async (req, res) => {
 let posterWorkerChild = null;
 let collectorRunning = false;
 let makeDraftsRunning = false;
+let posterWorkerRestartCount = 0;
+const POSTER_WORKER_MAX_RESTARTS = 10;
+const POSTER_WORKER_RESTART_DELAY_MS = 5000;
 
 function runScript(scriptName) {
   return new Promise((resolve, reject) => {
@@ -1653,6 +1664,22 @@ function startPosterWorker() {
     posterWorkerChild = null;
     if (code !== null && code !== 0) {
       console.error(`Poster worker çıktı: code=${code} signal=${signal}`);
+    }
+    // Crash recovery: SIGTERM/SIGINT değilse (graceful shutdown) yeniden başlat
+    if (signal !== "SIGTERM" && signal !== "SIGINT") {
+      if (posterWorkerRestartCount < POSTER_WORKER_MAX_RESTARTS) {
+        posterWorkerRestartCount += 1;
+        console.log(
+          `Poster worker yeniden başlatılıyor (${posterWorkerRestartCount}/${POSTER_WORKER_MAX_RESTARTS}) - ${POSTER_WORKER_RESTART_DELAY_MS}ms sonra`
+        );
+        setTimeout(() => {
+          if (!posterWorkerChild) startPosterWorker();
+        }, POSTER_WORKER_RESTART_DELAY_MS);
+      } else {
+        console.error(
+          `Poster worker max restart (${POSTER_WORKER_MAX_RESTARTS}) aşıldı. Manuel restart gerekli.`
+        );
+      }
     }
   });
   console.log("Poster worker başlatıldı");

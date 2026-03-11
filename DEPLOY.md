@@ -136,7 +136,52 @@ Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir
 
 ### Debug endpoint'leri
 
+- `/health` – `ok`, `posterWorkerRunning`, `posterWorkerRestartCount`
 - `/debug-counts` – İstatistikler + auth durumu + queue durumu (serverNow, waitingJobs, isDue)
+
+## Sorun Giderme: Post Atılmıyor ("beklemede" Kalıyor)
+
+### 1. Poster worker çalışıyor mu?
+
+```bash
+curl https://xauto.onrender.com/health
+```
+
+`posterWorkerRunning: true` olmalı. `false` ise worker çökmüş veya başlamamış.
+
+**Çözüm:** Render → xauto → Manual Deploy (veya servisi yeniden başlat). Worker artık crash sonrası otomatik yeniden başlar (max 10 deneme).
+
+### 2. Uyku modu (Render Free tier)
+
+15 dk istek gelmezse servis uyur; bu sürede post atılmaz.
+
+**Çözüm:** UptimeRobot ile 5 dk'da bir `https://xauto.onrender.com/health` ping atın.
+
+### 3. Aktif saat penceresi
+
+Worker sadece 06:00–01:00 (TR) arasında post atar. Bu saatler dışındaysa bekler.
+
+### 4. Cooldown
+
+Son post'tan sonra en az 57 dk beklenir (schedule_settings ile değiştirilebilir).
+
+### 5. Job due mu?
+
+`/debug-counts` → `queueDebug.waitingJobs` → her job için `isDue: true` olmalı (süre geçtiyse).
+
+### 6. Manuel post
+
+"Şimdi Paylaş" butonu çalışıyorsa X auth doğru; sorun worker tarafında.
+
+### 7. Render Logs
+
+Render → xauto → Logs:
+- `Poster worker başlatıldı` – worker başladı
+- `Poster worker çıktı: code=...` – worker çöktü
+- `Poster worker yeniden başlatılıyor` – otomatik yeniden başlatma
+- `⏸️ Aktif saat dışında` – pencere dışı
+- `⏸️ Cooldown` – aralık beklemesi
+- `⏳ Due job yok` – scheduled_at henüz gelmemiş
 
 ## Kontrol Listesi
 
