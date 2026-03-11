@@ -16,6 +16,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
+let OPENAI_KEY_VALID = !!OPENAI_API_KEY;
 const FALLBACK_LINK_SCORE_THRESHOLD = Number(
   process.env.FALLBACK_LINK_SCORE_THRESHOLD || 80
 );
@@ -110,43 +111,80 @@ function scoreVirality(sourceHandle, text, hasMedia) {
   };
 }
 
+const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 45000);
+const OPENAI_MAX_RETRIES = Number(process.env.OPENAI_MAX_RETRIES || 3);
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function openaiChat(systemPrompt, userPrompt, temperature = 0.4) {
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY yok");
   }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      temperature,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    }),
-  });
+  let lastError = null;
+  for (let attempt = 1; attempt <= OPENAI_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
-  const textBody = await res.text();
-  let json = null;
-  try {
-    json = JSON.parse(textBody);
-  } catch (_) {}
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          temperature,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+        signal: controller.signal,
+      });
 
-  if (!res.ok) {
-    throw new Error(`OpenAI hata ${res.status}: ${textBody.slice(0, 500)}`);
+      clearTimeout(timeoutId);
+
+      const textBody = await res.text();
+      let json = null;
+      try {
+        json = JSON.parse(textBody);
+      } catch (_) {}
+
+      if (!res.ok) {
+        const err = new Error(`OpenAI hata ${res.status}: ${textBody.slice(0, 500)}`);
+        err.status = res.status;
+        throw err;
+      }
+
+      const out = String(json?.choices?.[0]?.message?.content || "").trim();
+      if (!out) {
+        throw new Error("OpenAI boş cevap döndü");
+      }
+
+      return out;
+    } catch (e) {
+      lastError = e;
+      const status = e?.status;
+      const isRetryable =
+        status === 429 ||
+        (status >= 500 && status < 600) ||
+        e?.name === "AbortError" ||
+        e?.message?.includes("fetch");
+
+      if (isRetryable && attempt < OPENAI_MAX_RETRIES) {
+        const waitMs = Math.min(2000 * Math.pow(2, attempt - 1), 15000);
+        console.log(`⚠️ OpenAI attempt ${attempt}/${OPENAI_MAX_RETRIES} failed: ${e.message}. ${waitMs}ms sonra tekrar denenecek.`);
+        await sleep(waitMs);
+      } else {
+        throw lastError;
+      }
+    }
   }
-
-  const out = String(json?.choices?.[0]?.message?.content || "").trim();
-  if (!out) {
-    throw new Error("OpenAI boş cevap döndü");
-  }
-
-  return out;
+  throw lastError;
 }
 
 async function translateToTurkish(text) {
@@ -164,8 +202,9 @@ async function translateToTurkish(text) {
     return input;
   }
 
-  if (!OPENAI_API_KEY) {
-    console.log("⚠️ OPENAI_API_KEY yok, çeviri yapılmadı.");
+  if (!OPENAI_API_KEY || !OPENAI_KEY_VALID) {
+    if (!OPENAI_KEY_VALID) console.log("⚠️ OpenAI key geçersiz, çeviri atlandı.");
+    else console.log("⚠️ OPENAI_API_KEY yok, çeviri yapılmadı.");
     return input;
   }
 
@@ -242,8 +281,9 @@ async function generateComment(sourceHandle, originalText, translationTr, hasMed
   const cleanOriginal = cleanupTweetText(originalText);
   const cleanTranslation = cleanupTweetText(translationTr);
 
-  if (!OPENAI_API_KEY) {
-    console.log("⚠️ OPENAI_API_KEY yok, yorum fallback kullanılacak.");
+  if (!OPENAI_API_KEY || !OPENAI_KEY_VALID) {
+    if (!OPENAI_KEY_VALID) console.log("⚠️ OpenAI key geçersiz, yorum fallback kullanılacak.");
+    else console.log("⚠️ OPENAI_API_KEY yok, yorum fallback kullanılacak.");
     return fallbackComment(sourceHandle, cleanOriginal);
   }
 
@@ -350,12 +390,43 @@ Rules:
   }
 }
 
+async function verifyOpenAIKey() {
+  if (!OPENAI_API_KEY) return false;
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    if (res.status === 401) {
+      console.log("⚠️ OPENAI_API_KEY geçersiz (401). Yorumlar ve çeviriler fallback ile üretilecek.");
+      OPENAI_KEY_VALID = false;
+      return false;
+    }
+    if (res.status === 429) {
+      console.log("⚠️ OpenAI rate limit (429). Devam ediliyor, retry ile denenecek.");
+      return true;
+    }
+    return res.ok;
+  } catch (e) {
+    console.log("⚠️ OpenAI key doğrulama atlandı:", e.message);
+    return true;
+  }
+}
+
 async function run() {
   console.log("🚀 make-drafts başladı");
   if (OPENAI_API_KEY) {
-    console.log("✅ OPENAI_API_KEY SET – yorumlar AI ile üretilecek");
+    const ok = await verifyOpenAIKey();
+    if (ok) {
+      console.log("✅ OPENAI_API_KEY geçerli – yorumlar AI ile üretilecek");
+    } else if (OPENAI_API_KEY.length > 10) {
+      console.log("⚠️ OPENAI_API_KEY var ama doğrulama başarısız. Fallback kullanılacak.");
+    }
   } else {
-    console.log("⚠️ OPENAI_API_KEY YOK – yorumlar fallback ile üretilecek (Render'da Environment'a ekleyin)");
+    console.log("⚠️ OPENAI_API_KEY YOK – yorumlar fallback ile üretilecek (Render → Environment → OPENAI_API_KEY ekleyin)");
   }
   await ensureTweetMediaValidationSchema(pool);
 

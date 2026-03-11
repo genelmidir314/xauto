@@ -139,9 +139,11 @@ Render free planda 15 dk istek gelmezse servis uyur. UptimeRobot ile 5 dk'da bir
 
 **Yorumlar AI ile üretilmiyorsa** (fallback kullanılıyorsa):
 
-1. Render → xauto → Environment → `OPENAI_API_KEY` ekleyin (OpenAI API key)
-2. Deploy sonrası `https://xauto.onrender.com/debug-counts` → `auth.openaiKey: true` olmalı
-3. make-drafts loglarında `✅ OPENAI_API_KEY SET` görünmeli; `⚠️ OPENAI_API_KEY YOK` görürseniz key eksik
+1. Render → xauto → Environment → `OPENAI_API_KEY` ekleyin (OpenAI API key, `sk-...` ile başlar)
+2. Deploy sonrası make-drafts loglarında `✅ OPENAI_API_KEY geçerli` görünmeli
+3. `⚠️ OPENAI_API_KEY geçersiz (401)` → Key yanlış veya süresi dolmuş, yenileyin
+4. `⚠️ OpenAI attempt 1/3 failed` → Rate limit veya geçici hata, otomatik retry yapılır (max 3 deneme)
+5. Opsiyonel: `OPENAI_TIMEOUT_MS=45000` (varsayılan 45s), `OPENAI_MAX_RETRIES=3`
 
 ### Debug endpoint'leri
 
