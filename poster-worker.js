@@ -509,7 +509,7 @@ async function acquireSingletonLock() {
 
     if (!ok) {
       console.error("❌ Başka bir poster-worker zaten çalışıyor (advisory lock alınamadı). Çıkıyorum.");
-      process.exit(1);
+      process.exit(2); // 2 = lock failed, yeniden başlatma (başka instance çalışıyor)
     }
 
     console.log("🔒 Singleton lock alındı. (Tek worker çalışacak)");

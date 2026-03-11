@@ -1665,21 +1665,26 @@ function startPosterWorker() {
     if (code !== null && code !== 0) {
       console.error(`Poster worker çıktı: code=${code} signal=${signal}`);
     }
-    // Crash recovery: SIGTERM/SIGINT değilse (graceful shutdown) yeniden başlat
-    if (signal !== "SIGTERM" && signal !== "SIGINT") {
-      if (posterWorkerRestartCount < POSTER_WORKER_MAX_RESTARTS) {
-        posterWorkerRestartCount += 1;
-        console.log(
-          `Poster worker yeniden başlatılıyor (${posterWorkerRestartCount}/${POSTER_WORKER_MAX_RESTARTS}) - ${POSTER_WORKER_RESTART_DELAY_MS}ms sonra`
-        );
-        setTimeout(() => {
-          if (!posterWorkerChild) startPosterWorker();
-        }, POSTER_WORKER_RESTART_DELAY_MS);
-      } else {
-        console.error(
-          `Poster worker max restart (${POSTER_WORKER_MAX_RESTARTS}) aşıldı. Manuel restart gerekli.`
-        );
-      }
+    // code=2: lock alınamadı (başka instance çalışıyor) – yeniden başlatma
+    if (code === 2) {
+      console.log("Poster worker lock alamadı (başka instance var). Yeniden başlatılmıyor.");
+      return;
+    }
+    // SIGTERM/SIGINT: graceful shutdown – yeniden başlatma
+    if (signal === "SIGTERM" || signal === "SIGINT") return;
+    // Crash recovery: gerçek çökme durumunda yeniden başlat
+    if (posterWorkerRestartCount < POSTER_WORKER_MAX_RESTARTS) {
+      posterWorkerRestartCount += 1;
+      console.log(
+        `Poster worker yeniden başlatılıyor (${posterWorkerRestartCount}/${POSTER_WORKER_MAX_RESTARTS}) - ${POSTER_WORKER_RESTART_DELAY_MS}ms sonra`
+      );
+      setTimeout(() => {
+        if (!posterWorkerChild) startPosterWorker();
+      }, POSTER_WORKER_RESTART_DELAY_MS);
+    } else {
+      console.error(
+        `Poster worker max restart (${POSTER_WORKER_MAX_RESTARTS}) aşıldı. Manuel restart gerekli.`
+      );
     }
   });
   console.log("Poster worker başlatıldı");
