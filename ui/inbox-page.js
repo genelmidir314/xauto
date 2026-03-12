@@ -25,11 +25,18 @@ function renderInboxTabs(statuses, currentStatus, getCount, helpers, limit) {
   `;
 }
 
-function renderPendingMediaFilters(currentPendingMedia, limit, esc) {
+function renderPendingMediaFilters(currentPendingMedia, limit, categoryFilter, sourceFilter, esc) {
   const filters = [
     { id: "all", label: "Tumu" },
     { id: "video", label: "Sadece videolu" },
   ];
+
+  const base = (pm) => {
+    const p = new URLSearchParams({ status: "pending", pendingMedia: pm, limit: String(limit) });
+    if (categoryFilter) p.set("category", categoryFilter);
+    if (sourceFilter) p.set("source", sourceFilter);
+    return "/inbox?" + p.toString();
+  };
 
   return `
     <div class="subNav">
@@ -37,29 +44,47 @@ function renderPendingMediaFilters(currentPendingMedia, limit, esc) {
         .map(
           (filter) => `<a class="btn ${
             currentPendingMedia === filter.id ? "isActive" : ""
-          }" href="/inbox?status=pending&pendingMedia=${encodeURIComponent(
-            filter.id
-          )}&limit=${encodeURIComponent(limit)}">${esc(filter.label)}</a>`
+          }" href="${esc(base(filter.id))}">${esc(filter.label)}</a>`
         )
         .join("")}
     </div>
   `;
 }
 
-function renderSourceFilter(currentSource, status, pendingMedia, limit, esc) {
+function renderSourceFilter(currentSource, status, pendingMedia, limit, categoryFilter, esc) {
   const baseParams = new URLSearchParams({ status, limit: String(limit) });
   if (status === "pending") baseParams.set("pendingMedia", pendingMedia);
+  if (categoryFilter) baseParams.set("category", categoryFilter);
   return `
     <form class="subNav" method="get" action="/inbox" style="display:flex; gap:8px; align-items:center;">
       <input type="hidden" name="status" value="${esc(status)}" />
       <input type="hidden" name="limit" value="${esc(limit)}" />
       ${status === "pending" ? `<input type="hidden" name="pendingMedia" value="${esc(pendingMedia)}" />` : ""}
+      ${categoryFilter ? `<input type="hidden" name="category" value="${esc(categoryFilter)}" />` : ""}
       <label class="muted" style="font-size:12px;">Kaynak:</label>
       <input class="input" name="source" type="text" placeholder="@handle" value="${esc(
         currentSource || ""
       )}" style="width:140px; padding:8px 10px;" />
       <button class="btn" type="submit">Filtrele</button>
     </form>
+  `;
+}
+
+function renderCategoryFilter(currentCategory, categoryOptions, status, pendingMedia, limit, sourceFilter, esc) {
+  if (!categoryOptions || categoryOptions.length === 0) return "";
+  const base = (cat) => {
+    const p = new URLSearchParams({ status, limit: String(limit) });
+    if (status === "pending") p.set("pendingMedia", pendingMedia);
+    if (sourceFilter) p.set("source", sourceFilter);
+    if (cat) p.set("category", cat);
+    return "/inbox?" + p.toString();
+  };
+  return `
+    <div class="subNav">
+      <span class="muted" style="font-size:12px;">Kategori:</span>
+      <a class="btn ${!currentCategory ? "isActive" : ""}" href="${esc(base(""))}">Tumu</a>
+      ${categoryOptions.map((cat) => `<a class="btn ${currentCategory === cat ? "isActive" : ""}" href="${esc(base(cat))}">${esc(cat)}</a>`).join("")}
+    </div>
   `;
 }
 
@@ -424,6 +449,7 @@ function renderInboxCard(row, helpers) {
         <div class="metaRight">
           <div class="muted mono">tweet_id: ${esc(tweetId)}</div>
           <div class="muted">kaynak: <b>${esc(source)}</b></div>
+          ${row.source_category ? `<span class="pill" style="font-size:12px;">${esc(row.source_category)}</span>` : ""}
           ${xUrl ? `<a class="btn" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer">X link</a>` : ""}
         </div>
       </div>
@@ -476,6 +502,8 @@ function renderInboxPage({
   queueView,
   pendingMedia,
   sourceFilter = "",
+  categoryFilter = "",
+  categoryOptions = [],
   rows,
   counts,
   dashboard,
@@ -544,11 +572,13 @@ function renderInboxPage({
         currentLimit: limit,
         params: Object.assign(
           status === "pending" ? { status, pendingMedia } : { status },
-          sourceFilter ? { source: sourceFilter } : {}
+          sourceFilter ? { source: sourceFilter } : {},
+          categoryFilter ? { category: categoryFilter } : {}
         ),
       }, esc)}
-      ${status === "pending" ? renderPendingMediaFilters(pendingMedia, limit, esc) : ""}
-      ${renderSourceFilter(sourceFilter || "", status, pendingMedia, limit, esc)}
+      ${status === "pending" ? renderPendingMediaFilters(pendingMedia, limit, categoryFilter || "", sourceFilter || "", esc) : ""}
+      ${renderCategoryFilter(categoryFilter, categoryOptions, status, pendingMedia, limit, sourceFilter, esc)}
+      ${renderSourceFilter(sourceFilter || "", status, pendingMedia, limit, categoryFilter || "", esc)}
       <div class="subNav">
         ${status === "pending" ? `<button class="btn btnApprove" type="button" data-action="bulk-approve" data-bulk-count="10">En yuksek 10'u onayla</button>` : ""}
         <button class="btn btnCancel" type="button" data-action="clear-rejected">Rejected'i Bosalt</button>
@@ -558,7 +588,7 @@ function renderInboxPage({
           status === "pending"
             ? `&pendingMedia=${encodeURIComponent(pendingMedia)}`
             : ""
-        }${sourceFilter ? `&source=${encodeURIComponent(sourceFilter)}` : ""}&limit=${limit}" target="_blank" rel="noopener noreferrer">Drafts JSON</a>
+        }${sourceFilter ? `&source=${encodeURIComponent(sourceFilter)}` : ""}${categoryFilter ? `&category=${encodeURIComponent(categoryFilter)}` : ""}&limit=${limit}" target="_blank" rel="noopener noreferrer">Drafts JSON</a>
       </div>
     </div>
 

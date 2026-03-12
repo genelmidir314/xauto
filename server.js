@@ -785,6 +785,7 @@ function normalizeInboxFilters(query = {}) {
   const rawQueueView = String(query.queueView || "").toLowerCase();
   const rawPendingMedia = String(query.pendingMedia || "").toLowerCase();
   const rawSource = String(query.source || "").trim().replace(/^@/, "");
+  const rawCategory = String(query.category || "").trim() || null;
   const status = rawStatus === "queued" ? "approved" : rawStatus;
   const allowedStatuses = new Set(["pending", "approved", "rejected", "posted"]);
   const nextStatus = allowedStatuses.has(status) ? status : "pending";
@@ -800,8 +801,9 @@ function normalizeInboxFilters(query = {}) {
       : "all";
 
   const sourceFilter = rawSource.length > 0 ? rawSource : null;
+  const categoryFilter = rawCategory && rawCategory.length > 0 ? rawCategory : null;
 
-  return { status: nextStatus, queueView, pendingMedia, sourceFilter };
+  return { status: nextStatus, queueView, pendingMedia, sourceFilter, categoryFilter };
 }
 
 function getTodayBoundsTR() {
@@ -1230,7 +1232,7 @@ app.post("/cancel-make-drafts", (req, res) => {
 });
 
 app.get("/drafts", async (req, res) => {
-  const { status, queueView, pendingMedia, sourceFilter } = normalizeInboxFilters(req.query);
+  const { status, queueView, pendingMedia, sourceFilter, categoryFilter } = normalizeInboxFilters(req.query);
   const limit = Math.min(Number(req.query.limit || 200), 500);
 
   try {
@@ -1238,9 +1240,12 @@ app.get("/drafts", async (req, res) => {
       ? " AND t.source_handle ILIKE $5"
       : "";
     const sourcePattern = sourceFilter ? `%${sourceFilter}%` : "";
-    const params = sourceFilter
-      ? [status, status, pendingMedia, limit, sourcePattern]
-      : [status, status, pendingMedia, limit];
+    const categoryCondition = categoryFilter
+      ? ` AND (s.category = $${sourceFilter ? 6 : 5})`
+      : "";
+    let params = [status, status, pendingMedia, limit];
+    if (sourceFilter) params.push(sourcePattern);
+    if (categoryFilter) params.push(categoryFilter);
 
     const orderBy =
       status === "approved"
@@ -1259,11 +1264,14 @@ app.get("/drafts", async (req, res) => {
         t.has_media,
         t.media_uploadable,
         t.media_validation_error,
+        s.category AS source_category,
         q.id AS queue_id,
         q.scheduled_at,
         q.status AS queue_status
       FROM drafts d
       LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
+      LEFT JOIN sources s ON t.source_handle IS NOT NULL AND s.handle IS NOT NULL
+        AND LOWER(TRIM(BOTH '@' FROM t.source_handle)) = LOWER(TRIM(s.handle))
       LEFT JOIN LATERAL (
         SELECT q1.id, q1.scheduled_at, q1.status
         FROM queue q1
@@ -1288,7 +1296,7 @@ app.get("/drafts", async (req, res) => {
               WHERE m.elem->>'type' IN ('video', 'animated_gif')
             )
           )
-        )${sourceCondition}
+        )${sourceCondition}${categoryCondition}
       ${orderBy}
       LIMIT $4
       `,
@@ -1545,7 +1553,7 @@ app.post("/queue/:id/cancel", async (req, res) => {
 // UI
 // =====================
 app.get(["/", "/inbox"], async (req, res) => {
-  const { status, queueView, pendingMedia, sourceFilter } = normalizeInboxFilters(req.query);
+  const { status, queueView, pendingMedia, sourceFilter, categoryFilter } = normalizeInboxFilters(req.query);
   const limit = clampUiLimit(req.query.limit, 200);
 
   try {
@@ -1557,14 +1565,22 @@ app.get(["/", "/inbox"], async (req, res) => {
       ? " AND t.source_handle ILIKE $5"
       : "";
     const sourcePattern = sourceFilter ? `%${sourceFilter}%` : "";
-    const params = sourceFilter
-      ? [status, status, pendingMedia, limit, sourcePattern]
-      : [status, status, pendingMedia, limit];
+    const categoryCondition = categoryFilter
+      ? ` AND (s.category = $${sourceFilter ? 6 : 5})`
+      : "";
+    let params = [status, status, pendingMedia, limit];
+    if (sourceFilter) params.push(sourcePattern);
+    if (categoryFilter) params.push(categoryFilter);
 
     const orderBy =
       status === "approved"
         ? "ORDER BY q.scheduled_at ASC NULLS LAST, d.id DESC"
         : "ORDER BY COALESCE(d.viral_score,0) DESC, d.id DESC";
+
+    const categoriesResult = await pool.query(
+      `SELECT DISTINCT category FROM sources WHERE category IS NOT NULL AND category <> '' ORDER BY category`
+    );
+    const categoryOptions = categoriesResult.rows.map((r) => r.category);
 
     const r = await pool.query(
       `
@@ -1578,11 +1594,14 @@ app.get(["/", "/inbox"], async (req, res) => {
         t.has_media,
         t.media_uploadable,
         t.media_validation_error,
+        s.category AS source_category,
         q.id AS queue_id,
         q.scheduled_at,
         q.status AS queue_status
       FROM drafts d
       LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
+      LEFT JOIN sources s ON t.source_handle IS NOT NULL AND s.handle IS NOT NULL
+        AND LOWER(TRIM(BOTH '@' FROM t.source_handle)) = LOWER(TRIM(s.handle))
       LEFT JOIN LATERAL (
         SELECT q1.id, q1.scheduled_at, q1.status
         FROM queue q1
@@ -1607,7 +1626,7 @@ app.get(["/", "/inbox"], async (req, res) => {
               WHERE m.elem->>'type' IN ('video', 'animated_gif')
             )
           )
-        )${sourceCondition}
+        )${sourceCondition}${categoryCondition}
       ${orderBy}
       LIMIT $4
       `,
@@ -1620,6 +1639,8 @@ app.get(["/", "/inbox"], async (req, res) => {
         queueView,
         pendingMedia,
         sourceFilter: sourceFilter || "",
+        categoryFilter: categoryFilter || "",
+        categoryOptions: categoryOptions || [],
         rows: r.rows.map((row) => ({
           ...row,
           raw_status: row.status,
