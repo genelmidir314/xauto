@@ -180,8 +180,47 @@ async function searchTweetsRecent(query, options = {}) {
   return { tweets, authorMap };
 }
 
+/**
+ * Tek tweet ID ile tweet detayı çeker (X linkinden).
+ * @param {string} tweetId - Tweet ID
+ * @returns {{ tweet: object, authorUsername: string|null }}
+ */
+async function getTweetById(tweetId) {
+  const id = String(tweetId || "").trim();
+  if (!id || !/^\d+$/.test(id)) throw new Error("Gecersiz tweet id");
+
+  const params = new URLSearchParams({
+    "tweet.fields":
+      "created_at,lang,public_metrics,attachments,author_id,referenced_tweets",
+    "user.fields": "username",
+    "media.fields":
+      "media_key,type,url,preview_image_url,alt_text,width,height,duration_ms,variants",
+    expansions:
+      "author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.attachments.media_keys",
+  });
+
+  const j = await xFetch(`/2/tweets/${id}?${params.toString()}`);
+  const tweet = j?.data;
+  if (!tweet) throw new Error("Tweet bulunamadi");
+
+  const includes = j?.includes || {};
+  const authorMap = new Map();
+  for (const u of includes?.users || []) {
+    if (u?.id && u?.username) authorMap.set(u.id, u.username);
+  }
+
+  tweet.__media = normalizeMedia(tweet, includes);
+  tweet.__author_username = tweet.author_id ? authorMap.get(tweet.author_id) : null;
+
+  return {
+    tweet,
+    authorUsername: tweet.__author_username || null,
+  };
+}
+
 module.exports = {
   getUserId,
   getLatestTweetsByUserId,
   searchTweetsRecent,
+  getTweetById,
 };
