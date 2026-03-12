@@ -141,18 +141,15 @@ async function getLatestTweetsByUserId(userId, sinceId) {
 }
 
 /**
- * Kelime/hashtag ile son 7 gün içindeki videolu tweetleri arar.
- * Query'ye has:video otomatik eklenir (yoksa).
- * @param {string} query - "#hashtag" veya "kelime"
+ * Kelime/hashtag ile son 7 gün içindeki tweetleri arar.
+ * has:video/has:media bazi X API planlarinda desteklenmez; medya filtresi collector-search'ta yapilir.
+ * @param {string} query - "#hashtag" veya "kelime" (isterseniz "query has:media" ekleyebilirsiniz)
  * @param {object} options - maxResults (default 100)
  * @returns {{ tweets: array, authorMap: Map<author_id, username> }}
  */
 async function searchTweetsRecent(query, options = {}) {
-  let q = String(query || "").trim();
+  const q = String(query || "").trim();
   if (!q) throw new Error("Search query bos");
-  if (!/has:(video|media)/i.test(q)) {
-    q = `${q} has:video`;
-  }
 
   const params = new URLSearchParams({
     query: q,

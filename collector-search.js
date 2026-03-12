@@ -43,7 +43,7 @@ async function run() {
     process.exit(1);
   }
 
-  console.log(`🔍 Search: "${query}" (has:video otomatik eklenir)`);
+  console.log(`🔍 Search: "${query}" (medyali tweetler filtrelenir)`);
 
   const { tweets } = await searchTweetsRecent(query, { maxResults: 100 });
 
