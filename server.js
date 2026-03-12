@@ -1415,6 +1415,20 @@ app.post("/drafts/:id/status", async (req, res) => {
   }
 });
 
+app.post("/clear-drafts", async (req, res) => {
+  const { status } = req.body || {};
+  const allowed = new Set(["rejected", "posted"]);
+  if (!allowed.has(status)) {
+    return res.status(400).json({ ok: false, error: "status rejected veya posted olmali" });
+  }
+  try {
+    const r = await pool.query(`DELETE FROM drafts WHERE status = $1`, [status]);
+    res.json({ ok: true, deletedCount: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post("/drafts/:id/approve-and-queue", async (req, res) => {
   const id = Number(req.params.id);
   const { comment_tr, translation_tr, use_comment } = req.body || {};

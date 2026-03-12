@@ -459,6 +459,38 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
           return;
         }
 
+        const clearRejectedBtn = event.target.closest('[data-action="clear-rejected"]');
+        if (clearRejectedBtn) {
+          if (!confirm("Rejected listesindeki tum kayitlar silinecek. Emin misiniz?")) return;
+          clearRejectedBtn.disabled = true;
+          try {
+            const r = await sendJson("/clear-drafts", { status: "rejected" });
+            if (!r.ok) throw new Error(r.error || "Bosaltma basarisiz");
+            alert((r.deletedCount ?? 0) + " kayit silindi. Sayfa yenileniyor.");
+            location.reload();
+          } catch (e) {
+            alert(e.message || "Rejected bosaltma basarisiz.");
+            clearRejectedBtn.disabled = false;
+          }
+          return;
+        }
+
+        const clearPostedBtn = event.target.closest('[data-action="clear-posted"]');
+        if (clearPostedBtn) {
+          if (!confirm("Posted listesindeki tum kayitlar silinecek. History kayitlari da silinir. Emin misiniz?")) return;
+          clearPostedBtn.disabled = true;
+          try {
+            const r = await sendJson("/clear-drafts", { status: "posted" });
+            if (!r.ok) throw new Error(r.error || "Bosaltma basarisiz");
+            alert((r.deletedCount ?? 0) + " kayit silindi. Sayfa yenileniyor.");
+            location.reload();
+          } catch (e) {
+            alert(e.message || "Posted bosaltma basarisiz.");
+            clearPostedBtn.disabled = false;
+          }
+          return;
+        }
+
         const button = event.target.closest("button[data-action]");
         if (!button) return;
         handleAction(button);

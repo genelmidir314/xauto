@@ -551,6 +551,8 @@ function renderInboxPage({
       ${renderSourceFilter(sourceFilter || "", status, pendingMedia, limit, esc)}
       <div class="subNav">
         ${status === "pending" ? `<button class="btn btnApprove" type="button" data-action="bulk-approve" data-bulk-count="10">En yuksek 10'u onayla</button>` : ""}
+        <button class="btn btnCancel" type="button" data-action="clear-rejected">Rejected'i Bosalt</button>
+        <button class="btn btnCancel" type="button" data-action="clear-posted">Posted'i Bosalt</button>
         <button class="btn" type="button" onclick="location.reload()">Yenile</button>
         <a class="btn" href="/drafts?status=${encodeURIComponent(status)}${
           status === "pending"
