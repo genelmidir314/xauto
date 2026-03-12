@@ -567,6 +567,82 @@ ${renderScheduleSettingsScriptBody()}
   </script>`;
 }
 
+function renderFollowClientScript() {
+  return `
+  <script>
+    (function() {
+      function qs(sel, root) { return (root || document).querySelector(sel); }
+      async function sendJson(url, body) {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        });
+        return r.json();
+      }
+      function setFollowMessage(text, kind) {
+        const el = document.getElementById("followMessage");
+        if (!el) return;
+        el.className = "message show " + (kind || "info");
+        el.textContent = text;
+      }
+      document.addEventListener("submit", async (e) => {
+        const form = e.target;
+        if (!form || form.id !== "followAddForm") return;
+        e.preventDefault();
+        const handle = (qs("#followHandle", form)?.value || "").trim().replace(/^@/, "");
+        if (!handle) {
+          setFollowMessage("Kullanici adi girin.", "error");
+          return;
+        }
+        const btn = qs("[data-follow-submit]", form);
+        if (btn) btn.disabled = true;
+        try {
+          const r = await sendJson("/follow-queue", { handle });
+          if (!r.ok) throw new Error(r.error || "Ekleme basarisiz");
+          setFollowMessage("Eklendi. Sayfa yenileniyor...", "success");
+          setTimeout(() => location.reload(), 600);
+        } catch (err) {
+          setFollowMessage(err.message || "Hata", "error");
+          if (btn) btn.disabled = false;
+        }
+      });
+      document.addEventListener("click", async (e) => {
+        const del = e.target.closest('[data-action="delete-follow"]');
+        if (del) {
+          const id = del.dataset.id;
+          if (!confirm("Bu kayit silinsin mi?")) return;
+          del.disabled = true;
+          try {
+            const r = await sendJson("/follow-queue/" + id + "/delete", {});
+            if (!r.ok) throw new Error(r.error || "Silme basarisiz");
+            del.closest("tr")?.remove();
+          } catch (err) {
+            setFollowMessage(err.message || "Hata", "error");
+          }
+          del.disabled = false;
+          return;
+        }
+        const retry = e.target.closest('[data-action="retry-follow"]');
+        if (retry) {
+          const id = retry.dataset.id;
+          retry.disabled = true;
+          try {
+            const r = await sendJson("/follow-queue/" + id + "/retry", {});
+            if (!r.ok) throw new Error(r.error || "Retry basarisiz");
+            setFollowMessage("next_follow_at sifirlandi. Sayfa yenileniyor...", "success");
+            setTimeout(() => location.reload(), 600);
+          } catch (err) {
+            setFollowMessage(err.message || "Hata", "error");
+            retry.disabled = false;
+          }
+          return;
+        }
+      });
+    })();
+  </script>`;
+}
+
 function renderCollectorClientScript() {
   return `
   <script>
@@ -639,4 +715,5 @@ module.exports = {
   renderQueueClientScript,
   renderSourcesClientScript,
   renderCollectorClientScript,
+  renderFollowClientScript,
 };

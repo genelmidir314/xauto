@@ -71,6 +71,19 @@ async function migrate() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS follow_queue (
+      id SERIAL PRIMARY KEY,
+      handle TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      followed_at TIMESTAMP,
+      last_error TEXT,
+      next_follow_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE(handle)
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS source_performance (
       source_id INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
       last_run_at TIMESTAMP,

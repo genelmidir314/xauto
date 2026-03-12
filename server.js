@@ -53,6 +53,7 @@ const { renderInboxPage } = require("./ui/inbox-page");
 const { renderHistoryPage } = require("./ui/history-page");
 const { renderSourcesPage } = require("./ui/sources-page");
 const { renderCollectorPage } = require("./ui/collector-page");
+const { renderFollowPage } = require("./ui/follow-page");
 
 const app = express();
 app.use(express.json({ limit: "4mb" }));
@@ -1645,6 +1646,93 @@ app.get("/sources-ui", async (req, res) => {
   }
 });
 
+app.get("/follow-queue", async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
+    const r = await pool.query(
+      `SELECT id, handle, status, followed_at, last_error, next_follow_at, created_at
+       FROM follow_queue
+       ORDER BY status ASC, id ASC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/follow-queue", async (req, res) => {
+  try {
+    const handle = String(req.body?.handle || "").trim().replace(/^@/, "");
+    if (!handle) {
+      return res.status(400).json({ ok: false, error: "Handle bos" });
+    }
+    await pool.query(
+      `INSERT INTO follow_queue (handle, status)
+       VALUES ($1, 'pending')
+       ON CONFLICT (handle) DO UPDATE SET status = 'pending', last_error = NULL, next_follow_at = NULL`,
+      [handle]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/follow-queue/:id/delete", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ ok: false, error: "Gecersiz id" });
+    }
+    await pool.query("DELETE FROM follow_queue WHERE id = $1", [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/follow-queue/:id/retry", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ ok: false, error: "Gecersiz id" });
+    }
+    await pool.query(
+      `UPDATE follow_queue SET next_follow_at = NULL, last_error = NULL WHERE id = $1 AND status = 'pending'`,
+      [id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/follow-ui", async (req, res) => {
+  const limit = clampUiLimit(req.query.limit, 100);
+  try {
+    const r = await pool.query(
+      `SELECT id, handle, status, followed_at, last_error, next_follow_at, created_at
+       FROM follow_queue
+       ORDER BY status ASC, id ASC
+       LIMIT $1`,
+      [limit]
+    );
+    res.send(
+      renderFollowPage({
+        items: r.rows,
+        helpers: uiHelpers,
+        limit,
+      })
+    );
+  } catch (e) {
+    res
+      .status(500)
+      .send(renderPageShell("Error", `<pre>${esc(e.stack || e.message)}</pre>`));
+  }
+});
+
 app.get("/queue-ui", (req, res) => {
   res.redirect(302, "/inbox?status=approved");
 });
@@ -1758,6 +1846,7 @@ app.get("/history", async (req, res) => {
 });
 
 let posterWorkerChild = null;
+let followWorkerChild = null;
 let collectorRunning = false;
 let makeDraftsRunning = false;
 let makeDraftsChild = null;
@@ -1834,6 +1923,29 @@ function startPosterWorker() {
   console.log("Poster worker başlatıldı");
 }
 
+function startFollowWorker() {
+  if (process.env.XAUTO_SKIP_FOLLOW_WORKER === "true") {
+    console.log("Follow worker atlanıyor (XAUTO_SKIP_FOLLOW_WORKER=true)");
+    return;
+  }
+  const workerPath = path.join(__dirname, "follow-worker.js");
+  followWorkerChild = spawn(process.execPath, [workerPath], {
+    stdio: "inherit",
+    cwd: __dirname,
+    env: process.env,
+  });
+  followWorkerChild.on("error", (err) => {
+    console.error("Follow worker hata:", err?.message || err);
+  });
+  followWorkerChild.on("exit", (code, signal) => {
+    followWorkerChild = null;
+    if (code !== null && code !== 0) {
+      console.error(`Follow worker çıktı: code=${code} signal=${signal}`);
+    }
+  });
+  console.log("Follow worker başlatıldı");
+}
+
 async function startServer() {
   await ensureScheduleSettingsTable(pool);
   await ensureSourcesManagementSchema(pool);
@@ -1847,19 +1959,18 @@ async function startServer() {
         : "Yazma endpoint korumasi: sadece localhost"
     );
     startPosterWorker();
+    startFollowWorker();
   });
 }
 
 process.on("SIGINT", () => {
-  if (posterWorkerChild) {
-    posterWorkerChild.kill("SIGTERM");
-  }
+  if (posterWorkerChild) posterWorkerChild.kill("SIGTERM");
+  if (followWorkerChild) followWorkerChild.kill("SIGTERM");
   process.exit(0);
 });
 process.on("SIGTERM", () => {
-  if (posterWorkerChild) {
-    posterWorkerChild.kill("SIGTERM");
-  }
+  if (posterWorkerChild) posterWorkerChild.kill("SIGTERM");
+  if (followWorkerChild) followWorkerChild.kill("SIGTERM");
   process.exit(0);
 });
 

@@ -59,6 +59,7 @@ function renderHistoryPage({ rows, helpers, limit }) {
           { href: "/inbox", label: "Inbox" },
           { href: "/sources-ui", label: "Sources UI" },
           { href: "/collector-ui", label: "Collector UI" },
+          { href: "/follow-ui", label: "Takip" },
           { href: "/history", label: "History JSON", targetBlank: true },
         ],
       },
