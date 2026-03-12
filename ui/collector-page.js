@@ -166,6 +166,10 @@ function renderCollectorPage({ collectorMetrics, performanceRows, helpers, limit
 
     <div class="toolbar">
       <button class="btn btnSave" type="button" data-action="run-collector">Tweet Cek</button>
+      <div class="subNav" style="align-items:center;">
+        <input id="collectorSearchQuery" class="input" type="text" placeholder="#hashtag veya kelime" style="width:180px;padding:8px 10px;" />
+        <button class="btn btnSave" type="button" data-action="run-collector-search">Search ile Cek</button>
+      </div>
       <button class="btn btnSave" type="button" data-action="run-make-drafts">Draft Uret</button>
       <button class="btn btnCancel" type="button" data-action="cancel-make-drafts">Draft Iptal</button>
       ${renderLimitPicker({ basePath: "/collector-ui", currentLimit: limit }, esc)}

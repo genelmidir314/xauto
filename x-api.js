@@ -140,7 +140,51 @@ async function getLatestTweetsByUserId(userId, sinceId) {
   return tweets;
 }
 
+/**
+ * Kelime/hashtag ile son 7 gün içindeki videolu tweetleri arar.
+ * Query'ye has:video otomatik eklenir (yoksa).
+ * @param {string} query - "#hashtag" veya "kelime"
+ * @param {object} options - maxResults (default 100)
+ * @returns {{ tweets: array, authorMap: Map<author_id, username> }}
+ */
+async function searchTweetsRecent(query, options = {}) {
+  let q = String(query || "").trim();
+  if (!q) throw new Error("Search query bos");
+  if (!/has:(video|media)/i.test(q)) {
+    q = `${q} has:video`;
+  }
+
+  const params = new URLSearchParams({
+    query: q,
+    max_results: String(options.maxResults || 100),
+    "tweet.fields":
+      "created_at,lang,public_metrics,attachments,author_id,referenced_tweets",
+    "user.fields": "username",
+    "media.fields":
+      "media_key,type,url,preview_image_url,alt_text,width,height,duration_ms,variants",
+    expansions:
+      "author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.attachments.media_keys",
+  });
+
+  const j = await xFetch(`/2/tweets/search/recent?${params.toString()}`);
+  const tweets = Array.isArray(j?.data) ? j.data : [];
+  const includes = j?.includes || {};
+
+  const authorMap = new Map();
+  for (const u of includes?.users || []) {
+    if (u?.id && u?.username) authorMap.set(u.id, u.username);
+  }
+
+  for (const t of tweets) {
+    t.__media = normalizeMedia(t, includes);
+    t.__author_username = t.author_id ? authorMap.get(t.author_id) : null;
+  }
+
+  return { tweets, authorMap };
+}
+
 module.exports = {
   getUserId,
   getLatestTweetsByUserId,
+  searchTweetsRecent,
 };

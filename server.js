@@ -1198,6 +1198,24 @@ app.post("/run-collector", async (req, res) => {
     });
 });
 
+app.post("/run-collector-search", async (req, res) => {
+  if (collectorSearchRunning) {
+    return res.status(409).json({ ok: false, error: "Collector search zaten calisiyor." });
+  }
+  const query = String(req.body?.query || "").trim();
+  if (!query) {
+    return res.status(400).json({ ok: false, error: "Query bos (ornek: #teknoloji veya AI)" });
+  }
+  collectorSearchRunning = true;
+  res.json({ ok: true, message: `Search baslatildi: "${query}". Tamamlaninca sayfayi yenileyin.` });
+  runScriptWithEnv("collector-search.js", { COLLECTOR_SEARCH_QUERY: query })
+    .then(() => { collectorSearchRunning = false; })
+    .catch((err) => {
+      collectorSearchRunning = false;
+      console.error("Collector search hata:", err?.message || err);
+    });
+});
+
 app.post("/run-make-drafts", async (req, res) => {
   if (makeDraftsRunning) {
     return res.status(409).json({ ok: false, error: "Make-drafts zaten calisiyor." });
@@ -1848,6 +1866,7 @@ app.get("/history", async (req, res) => {
 let posterWorkerChild = null;
 let followWorkerChild = null;
 let collectorRunning = false;
+let collectorSearchRunning = false;
 let makeDraftsRunning = false;
 let makeDraftsChild = null;
 let posterWorkerRestartCount = 0;
@@ -1856,6 +1875,26 @@ const POSTER_WORKER_RESTART_DELAY_MS = 5000;
 
 function runScript(scriptName) {
   return runScriptWithChild(scriptName, null);
+}
+
+function runScriptWithEnv(scriptName, extraEnv) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(__dirname, scriptName)], {
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: __dirname,
+      env: { ...process.env, PATH: pathEnv, ...extraEnv },
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (d) => { stdout += d.toString(); });
+    child.stderr?.on("data", (d) => { stderr += d.toString(); });
+    child.on("close", (code, signal) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else if (child.killed || signal === "SIGTERM") resolve({ stdout, stderr });
+      else reject(new Error(stderr || stdout || `Exit code ${code}`));
+    });
+    child.on("error", reject);
+  });
 }
 
 function runScriptWithChild(scriptName, onSpawn) {
