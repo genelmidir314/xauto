@@ -146,6 +146,65 @@ async function init() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS reply_sources (
+      id SERIAL PRIMARY KEY,
+      handle TEXT UNIQUE NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT true,
+      last_tweet_id TEXT,
+      x_user_id TEXT,
+      last_checked_at TIMESTAMP,
+      next_check_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reply_candidates (
+      id SERIAL PRIMARY KEY,
+      tweet_id TEXT UNIQUE NOT NULL,
+      author_handle TEXT,
+      text TEXT,
+      like_count INTEGER NOT NULL DEFAULT 0,
+      retweet_count INTEGER NOT NULL DEFAULT 0,
+      reply_count INTEGER NOT NULL DEFAULT 0,
+      viral_score INTEGER,
+      tweet_created_at TIMESTAMP,
+      ingested_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reply_drafts (
+      id SERIAL PRIMARY KEY,
+      tweet_id TEXT UNIQUE NOT NULL,
+      reply_text TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reply_queue (
+      id SERIAL PRIMARY KEY,
+      draft_id INTEGER NOT NULL REFERENCES reply_drafts(id) ON DELETE CASCADE,
+      scheduled_at TIMESTAMP NOT NULL,
+      status TEXT NOT NULL DEFAULT 'waiting',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reply_history (
+      id SERIAL PRIMARY KEY,
+      draft_id INTEGER NOT NULL REFERENCES reply_drafts(id) ON DELETE CASCADE,
+      posted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      x_reply_id TEXT
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS source_performance (
       source_id INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
       last_run_at TIMESTAMP,

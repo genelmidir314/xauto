@@ -754,10 +754,111 @@ function renderCollectorClientScript() {
   </script>`;
 }
 
+function renderReplyClientScript() {
+  return `
+  <script>
+    (function() {
+      function qs(s,r){return(r||document).querySelector(s);}
+      async function sendJson(url,body){
+        const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
+        return r.json();
+      }
+      function setMsg(text,kind){
+        const el=document.getElementById("replyMessage");
+        if(!el)return;
+        el.className="message show "+(kind||"info");
+        el.textContent=text;
+      }
+      function setSourceMsg(text,kind){
+        const el=document.getElementById("replySourceMessage");
+        if(!el)return;
+        el.className="message show "+(kind||"info");
+        el.textContent=text;
+      }
+      document.addEventListener("submit",async(e)=>{
+        if(e.target?.id==="replySourceAddForm"){
+          e.preventDefault();
+          const h=(qs("#replySourceHandle",e.target)?.value||"").trim().replace(/^@/,"");
+          if(!h){setSourceMsg("Handle girin","error");return;}
+          try{
+            const r=await sendJson("/reply-sources",{handle:h});
+            if(!r.ok)throw new Error(r.error||"Ekleme basarisiz");
+            setSourceMsg("Eklendi. Yenileniyor...","success");
+            setTimeout(()=>location.reload(),600);
+          }catch(err){
+            setSourceMsg(err.message||"Hata","error");
+          }
+        }
+      });
+      document.addEventListener("click",async(e)=>{
+        const runCollector=e.target.closest('[data-action="run-reply-collector"]');
+        if(runCollector){
+          runCollector.disabled=true;
+          try{
+            const r=await sendJson("/run-reply-collector",{});
+            if(!r.ok)throw new Error(r.error||"Basarisiz");
+            setMsg(r.message||"Baslatildi.","success");
+          }catch(err){setMsg(err.message||"Hata","error");}
+          runCollector.disabled=false;
+          return;
+        }
+        const runDrafts=e.target.closest('[data-action="run-make-reply-drafts"]');
+        if(runDrafts){
+          runDrafts.disabled=true;
+          try{
+            const r=await sendJson("/run-make-reply-drafts",{});
+            if(!r.ok)throw new Error(r.error||"Basarisiz");
+            setMsg(r.message||"Baslatildi.","success");
+          }catch(err){setMsg(err.message||"Hata","error");}
+          runDrafts.disabled=false;
+          return;
+        }
+        const del=e.target.closest('[data-action="delete-reply-source"]');
+        if(del){
+          const id=del.dataset.id;
+          if(!confirm("Silinsin mi?"))return;
+          del.disabled=true;
+          try{
+            const r=await sendJson("/reply-sources/"+id+"/delete",{});
+            if(!r.ok)throw new Error(r.error);
+            del.closest("tr")?.remove();
+          }catch(err){setSourceMsg(err.message,"error");}
+          del.disabled=false;
+          return;
+        }
+        const approve=e.target.closest('[data-action="approve-reply"]');
+        if(approve){
+          const id=approve.dataset.id;
+          approve.disabled=true;
+          try{
+            const r=await sendJson("/reply-drafts/"+id+"/approve",{});
+            if(!r.ok)throw new Error(r.error||"Basarisiz");
+            setMsg("Onaylandi, kuyruga eklendi.","success");
+            setTimeout(()=>location.reload(),800);
+          }catch(err){setMsg(err.message,"error");approve.disabled=false;}
+          return;
+        }
+        const reject=e.target.closest('[data-action="reject-reply"]');
+        if(reject){
+          const id=reject.dataset.id;
+          reject.disabled=true;
+          try{
+            const r=await sendJson("/reply-drafts/"+id+"/reject",{});
+            if(!r.ok)throw new Error(r.error);
+            reject.closest("tr")?.remove();
+          }catch(err){setMsg(err.message,"error");reject.disabled=false;}
+          return;
+        }
+      });
+    })();
+  </script>`;
+}
+
 module.exports = {
   renderInboxClientScript,
   renderQueueClientScript,
   renderSourcesClientScript,
   renderCollectorClientScript,
   renderFollowClientScript,
+  renderReplyClientScript,
 };

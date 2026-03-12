@@ -498,6 +498,7 @@ function renderInboxPage({
         navItems: [
           { href: "/sources-ui", label: "Sources UI" },
           { href: "/collector-ui", label: "Collector UI" },
+          { href: "/reply-ui", label: "Reply" },
           { href: "/follow-ui", label: "Takip" },
           { href: "/history-ui", label: "History UI" },
         ],

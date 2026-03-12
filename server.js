@@ -54,6 +54,7 @@ const { renderHistoryPage } = require("./ui/history-page");
 const { renderSourcesPage } = require("./ui/sources-page");
 const { renderCollectorPage } = require("./ui/collector-page");
 const { renderFollowPage } = require("./ui/follow-page");
+const { renderReplyPage } = require("./ui/reply-page");
 
 const app = express();
 app.use(express.json({ limit: "4mb" }));
@@ -1773,6 +1774,159 @@ app.get("/follow-ui", async (req, res) => {
   }
 });
 
+app.get("/reply-sources", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, handle, active, last_checked_at FROM reply_sources ORDER BY id ASC`
+    );
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/reply-sources", async (req, res) => {
+  try {
+    const handle = String(req.body?.handle || "").trim().replace(/^@/, "");
+    if (!handle) return res.status(400).json({ ok: false, error: "Handle bos" });
+    await pool.query(
+      `INSERT INTO reply_sources (handle, active) VALUES ($1, true) ON CONFLICT (handle) DO NOTHING`,
+      [handle]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/reply-sources/:id/delete", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: "Gecersiz id" });
+    await pool.query("DELETE FROM reply_sources WHERE id = $1", [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/run-reply-collector", async (req, res) => {
+  if (replyCollectorRunning) {
+    return res.status(409).json({ ok: false, error: "Reply collector zaten calisiyor." });
+  }
+  replyCollectorRunning = true;
+  res.json({ ok: true, message: "Reply collector baslatildi." });
+  runScript("reply-collector.js")
+    .then(() => { replyCollectorRunning = false; })
+    .catch((err) => {
+      replyCollectorRunning = false;
+      console.error("Reply collector hata:", err?.message || err);
+    });
+});
+
+app.post("/run-make-reply-drafts", async (req, res) => {
+  if (replyMakeDraftsRunning) {
+    return res.status(409).json({ ok: false, error: "Make-reply-drafts zaten calisiyor." });
+  }
+  replyMakeDraftsRunning = true;
+  res.json({ ok: true, message: "AI yorum uretimi baslatildi." });
+  runScript("make-reply-drafts.js")
+    .then(() => { replyMakeDraftsRunning = false; })
+    .catch((err) => {
+      replyMakeDraftsRunning = false;
+      console.error("Make-reply-drafts hata:", err?.message || err);
+    });
+});
+
+app.get("/reply-drafts", async (req, res) => {
+  try {
+    const status = req.query.status || "pending";
+    const r = await pool.query(
+      `
+      SELECT d.id, d.tweet_id, d.reply_text, d.status, d.created_at,
+             c.author_handle, c.text AS original_text, c.viral_score
+      FROM reply_drafts d
+      LEFT JOIN reply_candidates c ON c.tweet_id = d.tweet_id
+      WHERE d.status = $1
+      ORDER BY d.created_at DESC
+      LIMIT 100
+      `,
+      [status]
+    );
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/reply-drafts/:id/approve", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: "Gecersiz id" });
+    const draft = await pool.query(
+      `SELECT id, tweet_id FROM reply_drafts WHERE id = $1 AND status = 'pending'`,
+      [id]
+    );
+    if (draft.rowCount === 0) return res.status(404).json({ ok: false, error: "Draft bulunamadi" });
+    const intervalMin = Number(process.env.REPLY_INTERVAL_MINUTES || 5) || 5;
+    const scheduledAt = new Date(Date.now() + intervalMin * 60 * 1000);
+    await pool.query(
+      `INSERT INTO reply_queue (draft_id, scheduled_at, status) VALUES ($1, $2, 'waiting')`,
+      [id, scheduledAt]
+    );
+    await pool.query(`UPDATE reply_drafts SET status = 'approved' WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/reply-drafts/:id/reject", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: "Gecersiz id" });
+    await pool.query(`UPDATE reply_drafts SET status = 'rejected' WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/reply-ui", async (req, res) => {
+  try {
+    const [sourcesRes, draftsRes, countsRes] = await Promise.all([
+      pool.query("SELECT id, handle FROM reply_sources WHERE active = true ORDER BY id"),
+      pool.query(
+        `SELECT d.id, d.tweet_id, d.reply_text, d.status, c.author_handle, c.text AS original_text
+         FROM reply_drafts d
+         LEFT JOIN reply_candidates c ON c.tweet_id = d.tweet_id
+         WHERE d.status IN ('pending','approved')
+         ORDER BY d.created_at DESC LIMIT 50`
+      ),
+      pool.query(
+        `SELECT
+          (SELECT COUNT(*)::int FROM reply_sources WHERE active = true) AS sources,
+          (SELECT COUNT(*)::int FROM reply_candidates) AS candidates,
+          (SELECT COUNT(*)::int FROM reply_drafts WHERE status = 'pending') AS pending_drafts,
+          (SELECT COUNT(*)::int FROM reply_queue WHERE status = 'waiting') AS queued`
+      ),
+    ]);
+    const counts = countsRes.rows[0] || {};
+    res.send(
+      renderReplyPage({
+        sources: sourcesRes.rows,
+        drafts: draftsRes.rows,
+        helpers: uiHelpers,
+        counts,
+      })
+    );
+  } catch (e) {
+    res
+      .status(500)
+      .send(renderPageShell("Error", `<pre>${esc(e.stack || e.message)}</pre>`));
+  }
+});
+
 app.get("/queue-ui", (req, res) => {
   res.redirect(302, "/inbox?status=approved");
 });
@@ -1887,9 +2041,12 @@ app.get("/history", async (req, res) => {
 
 let posterWorkerChild = null;
 let followWorkerChild = null;
+let replyPosterChild = null;
 let collectorRunning = false;
 let collectorSearchRunning = false;
 let collectorFromLinkRunning = false;
+let replyCollectorRunning = false;
+let replyMakeDraftsRunning = false;
 let makeDraftsRunning = false;
 let makeDraftsChild = null;
 let posterWorkerRestartCount = 0;
@@ -2008,6 +2165,29 @@ function startFollowWorker() {
   console.log("Follow worker başlatıldı");
 }
 
+function startReplyPoster() {
+  if (process.env.XAUTO_SKIP_REPLY_POSTER === "true") {
+    console.log("Reply poster atlanıyor (XAUTO_SKIP_REPLY_POSTER=true)");
+    return;
+  }
+  const workerPath = path.join(__dirname, "reply-poster.js");
+  replyPosterChild = spawn(process.execPath, [workerPath], {
+    stdio: "inherit",
+    cwd: __dirname,
+    env: process.env,
+  });
+  replyPosterChild.on("error", (err) => {
+    console.error("Reply poster hata:", err?.message || err);
+  });
+  replyPosterChild.on("exit", (code, signal) => {
+    replyPosterChild = null;
+    if (code !== null && code !== 0) {
+      console.error(`Reply poster çıktı: code=${code} signal=${signal}`);
+    }
+  });
+  console.log("Reply poster başlatıldı");
+}
+
 async function startServer() {
   await ensureScheduleSettingsTable(pool);
   await ensureSourcesManagementSchema(pool);
@@ -2022,17 +2202,20 @@ async function startServer() {
     );
     startPosterWorker();
     startFollowWorker();
+    startReplyPoster();
   });
 }
 
 process.on("SIGINT", () => {
   if (posterWorkerChild) posterWorkerChild.kill("SIGTERM");
   if (followWorkerChild) followWorkerChild.kill("SIGTERM");
+  if (replyPosterChild) replyPosterChild.kill("SIGTERM");
   process.exit(0);
 });
 process.on("SIGTERM", () => {
   if (posterWorkerChild) posterWorkerChild.kill("SIGTERM");
   if (followWorkerChild) followWorkerChild.kill("SIGTERM");
+  if (replyPosterChild) replyPosterChild.kill("SIGTERM");
   process.exit(0);
 });
 

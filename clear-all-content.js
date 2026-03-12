@@ -1,5 +1,5 @@
 /**
- * Tüm draft, queue, history ve tweet kayıtlarını siler.
+ * Tüm draft, queue, history, tweet ve collector verilerini siler.
  * Sources ve schedule_settings korunur.
  *
  * Çalıştır: node clear-all-content.js
@@ -27,6 +27,8 @@ async function run() {
     const historyRes = await client.query("DELETE FROM history");
     const draftsRes = await client.query("DELETE FROM drafts");
     const tweetsRes = await client.query("DELETE FROM tweets");
+    const collectorRunsRes = await client.query("DELETE FROM collector_runs");
+    const sourcePerfRes = await client.query("DELETE FROM source_performance");
 
     await client.query("COMMIT");
 
@@ -35,6 +37,8 @@ async function run() {
     console.log(`   history: ${historyRes.rowCount}`);
     console.log(`   drafts: ${draftsRes.rowCount}`);
     console.log(`   tweets: ${tweetsRes.rowCount}`);
+    console.log(`   collector_runs (Collector Trend): ${collectorRunsRes.rowCount}`);
+    console.log(`   source_performance: ${sourcePerfRes.rowCount}`);
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
