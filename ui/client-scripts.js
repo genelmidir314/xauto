@@ -679,50 +679,6 @@ function renderCollectorClientScript() {
           return;
         }
 
-        const btnSearch = event.target.closest('[data-action="run-collector-search"]');
-        if (btnSearch) {
-          const query = (document.getElementById("collectorSearchQuery")?.value || "").trim();
-          if (!query) {
-            setCollectorMessage("Query girin (#hashtag veya kelime)", "error");
-            return;
-          }
-          btnSearch.disabled = true;
-          try {
-            const r = await sendJson("/run-collector-search", { query });
-            if (!r.ok) throw new Error(r.error || "Search basarisiz");
-            setCollectorMessage(r.message || "Search baslatildi.", "success");
-            btnSearch.disabled = false;
-          } catch (e) {
-            setCollectorMessage(e.message || "Hata", "error");
-            btnSearch.disabled = false;
-          }
-          return;
-        }
-
-        const btnLink = event.target.closest('[data-action="run-collector-from-link"]');
-        if (btnLink) {
-          const url = (document.getElementById("collectorFromLinkUrl")?.value || "").trim();
-          if (!url) {
-            setCollectorMessage("X linki girin", "error");
-            return;
-          }
-          if (!url.match(/status\/\d+/)) {
-            setCollectorMessage("Gecersiz X linki (status/ID icermeli)", "error");
-            return;
-          }
-          btnLink.disabled = true;
-          try {
-            const r = await sendJson("/run-collector-from-link", { url });
-            if (!r.ok) throw new Error(r.error || "Link'ten cekme basarisiz");
-            setCollectorMessage(r.message || "Tweet cekildi. Draft icin 'Draft Uret' tiklayin.", "success");
-            btnLink.disabled = false;
-          } catch (e) {
-            setCollectorMessage(e.message || "Hata", "error");
-            btnLink.disabled = false;
-          }
-          return;
-        }
-
         const btn2 = event.target.closest('[data-action="run-make-drafts"]');
         if (btn2) {
           btn2.disabled = true;

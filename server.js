@@ -1199,46 +1199,6 @@ app.post("/run-collector", async (req, res) => {
     });
 });
 
-app.post("/run-collector-search", async (req, res) => {
-  if (collectorSearchRunning) {
-    return res.status(409).json({ ok: false, error: "Collector search zaten calisiyor." });
-  }
-  const query = String(req.body?.query || "").trim();
-  if (!query) {
-    return res.status(400).json({ ok: false, error: "Query bos (ornek: #teknoloji veya AI)" });
-  }
-  collectorSearchRunning = true;
-  res.json({ ok: true, message: `Search baslatildi: "${query}". Tamamlaninca sayfayi yenileyin.` });
-  runScriptWithEnv("collector-search.js", { COLLECTOR_SEARCH_QUERY: query })
-    .then(() => { collectorSearchRunning = false; })
-    .catch((err) => {
-      collectorSearchRunning = false;
-      console.error("Collector search hata:", err?.message || err);
-    });
-});
-
-app.post("/run-collector-from-link", async (req, res) => {
-  if (collectorFromLinkRunning) {
-    return res.status(409).json({ ok: false, error: "Link'ten cekme zaten calisiyor." });
-  }
-  const url = String(req.body?.url || "").trim();
-  if (!url) {
-    return res.status(400).json({ ok: false, error: "X linki bos (ornek: https://x.com/user/status/123)" });
-  }
-  const tweetIdMatch = url.match(/status\/(\d+)/);
-  if (!tweetIdMatch) {
-    return res.status(400).json({ ok: false, error: "Gecersiz X linki. status/ID icermeli." });
-  }
-  collectorFromLinkRunning = true;
-  res.json({ ok: true, message: "Link'ten tweet cekiliyor. Tamamlaninca sayfayi yenileyin." });
-  runScriptWithEnv("collector-from-link.js", { COLLECTOR_FROM_LINK_URL: url })
-    .then(() => { collectorFromLinkRunning = false; })
-    .catch((err) => {
-      collectorFromLinkRunning = false;
-      console.error("Collector from-link hata:", err?.message || err);
-    });
-});
-
 app.post("/run-make-drafts", async (req, res) => {
   if (makeDraftsRunning) {
     return res.status(409).json({ ok: false, error: "Make-drafts zaten calisiyor." });
@@ -2043,8 +2003,6 @@ let posterWorkerChild = null;
 let followWorkerChild = null;
 let replyPosterChild = null;
 let collectorRunning = false;
-let collectorSearchRunning = false;
-let collectorFromLinkRunning = false;
 let replyCollectorRunning = false;
 let replyMakeDraftsRunning = false;
 let makeDraftsRunning = false;
