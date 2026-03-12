@@ -56,6 +56,7 @@ async function init() {
       tweet_id TEXT UNIQUE NOT NULL,
       comment_tr TEXT,
       translation_tr TEXT,
+      use_comment BOOLEAN NOT NULL DEFAULT true,
       format_key TEXT,
       viral_score INTEGER,
       viral_reason TEXT,
@@ -63,6 +64,10 @@ async function init() {
       status TEXT NOT NULL DEFAULT 'pending', -- pending/approved/rejected/posted/failed
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT true;
   `);
 
   await pool.query(`

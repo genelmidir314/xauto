@@ -35,7 +35,8 @@ async function migrate() {
     ALTER TABLE drafts
     ADD COLUMN IF NOT EXISTS viral_score INTEGER,
     ADD COLUMN IF NOT EXISTS viral_reason TEXT,
-    ADD COLUMN IF NOT EXISTS scored_at TIMESTAMP;
+    ADD COLUMN IF NOT EXISTS scored_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT true;
   `);
 
   await pool.query(`

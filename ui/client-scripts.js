@@ -217,15 +217,18 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
       }
 
       function payloadFor(card) {
+        const useCommentEl = qs('[data-field="use-comment"]', card);
         return {
           comment_tr: qs('[data-field="comment"]', card)?.value ?? "",
           translation_tr: qs('[data-field="translation"]', card)?.value ?? "",
+          use_comment: useCommentEl ? useCommentEl.checked : true,
         };
       }
 
       function getPreviewText(card) {
         const payload = payloadFor(card);
-        const comment = payload.comment_tr.trim();
+        const useComment = payload.use_comment !== false;
+        const comment = useComment ? payload.comment_tr.trim() : "";
         const translation = payload.translation_tr.trim();
         const formatKey = card.dataset.formatKey || "";
         const xUrl = (card.dataset.xUrl || "").trim();
@@ -399,6 +402,17 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
               "success"
             );
             location.reload();
+          } else if (action === "regenerate-comment") {
+            result = await sendJson("/drafts/" + id + "/regenerate-comment", {});
+            if (!result.ok) throw new Error(result.error || "Yorum uretilemedi");
+            const commentEl = qs('[data-field="comment"]', card);
+            if (commentEl) {
+              commentEl.value = result.comment_tr || "";
+            }
+            card.dataset.useComment = "true";
+            const useCommentCheck = qs('[data-field="use-comment"]', card);
+            if (useCommentCheck) useCommentCheck.checked = true;
+            setMessage(card, "Yorum yenilendi.", "success");
           }
         } catch (error) {
           setMessage(card, error.message || "İslem basarisiz.", "error");
@@ -412,6 +426,18 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
         const card = getCard(event.target);
         if (!card) return;
         if (event.target.matches("[data-field]")) {
+          if (event.target.matches('[data-field="use-comment"]')) {
+            card.dataset.useComment = event.target.checked ? "true" : "false";
+          }
+          updatePreview(card);
+        }
+      });
+
+      document.addEventListener("change", (event) => {
+        const card = getCard(event.target);
+        if (!card) return;
+        if (event.target.matches('[data-field="use-comment"]')) {
+          card.dataset.useComment = event.target.checked ? "true" : "false";
           updatePreview(card);
         }
       });

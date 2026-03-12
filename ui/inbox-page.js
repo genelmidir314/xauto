@@ -403,7 +403,7 @@ function renderInboxCard(row, helpers) {
       String(row.queue_id || "")
     )}" data-format-key="${esc(
       row.format_key || ""
-    )}" data-x-url="${esc(xUrl)}">
+    )}" data-x-url="${esc(xUrl)}" data-use-comment="${row.use_comment !== false ? "true" : "false"}">
       <div class="draftHeader">
         <div class="titleBlock">
           <div class="draftTitle">
@@ -452,6 +452,13 @@ function renderInboxCard(row, helpers) {
 
         <section class="fieldStack">
           <div class="label">Yorum</div>
+          <div class="commentControls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" data-field="use-comment" ${row.use_comment !== false ? "checked" : ""} />
+              <span>Yorumu kullan</span>
+            </label>
+            <button type="button" class="btn btnSave" data-action="regenerate-comment">Yorumu yenile</button>
+          </div>
           <textarea class="box mono" data-field="comment">${esc(row.comment_tr || "")}</textarea>
         </section>
       </div>
