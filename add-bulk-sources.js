@@ -332,12 +332,111 @@ Bethesda
 BethesdaSupport
 BethesdaStudios
 BethesdaGear
+
+bpthaber
+bptspor
+trtspor
+aspor
+ntvspor
+fanatikcomtr
+fotomac
+sporx
+socratesdergi
+voleybolmagazin
+mackolik
+mackolikcanli
+goalcomtr
+futbolarena
+ajansspor
+ajansfutbol
+transferweb
+transferhaber
+sporcope
+sporcopeplus
+
+diziitakipcisii
+trkseries
+tvlegendstr
+dizimagazin
+dizihaberleri
+dizireyting
+dizigundemi
+dizidunyasi
+diziizlehaber
+diziturkiye
+dizifan
+dizirehberi
+dizipostasi
+diziupdate
+dizihaber
+
+beyazperde
+boxofficeturkiye
+filmloverss
+filmdunyasi
+filmklasikleri
+filmhaberleri
+filmgundemi
+filmkolik
+filmcriticstr
+filmreplikleri
+filmanaliz
+filmtavsiyeleri
+filmtwitter
+filmpostasi
+filmturkiye
+
+sinema_dergi
+sinematurk
+sinemahaber
+sinemadunyasi
+sinemarehberi
+sinemafragman
+sinemaklup
+sinemasever
+sinemagundem
+sinemaanaliz
+
+besiktas
+fenerbahce
+galatasaraysk
+trabzonspor
+superlig
+tff_org
+tff_1lig
+euroleague
+anadoluefessk
+fenerbahcebeko
+galatasaraybasket
+tbf
+voleybolunsesi
+tvfvoleybol
+
+premierligtr
+laligatr
+bundesligatr
+serieatr
+championsleague
+europaleague
+
+nba
+nbaturkiye
+lakers
+warriors
+espnfc
+brfootball
+433
+overtime
+houseofhighlights
 `.trim().split("\n").map((h) => h.trim()).filter(Boolean);
 
 function getCategory(handle) {
   const h = handle.toLowerCase();
-  if (/(sports|football|soccer|league|nfl|nba|mlb|nhl|ufc|f1|motogp|wwe|champions|uefa|fifa|mls|nwsl|golazo|dazn|bein|espn|goal|bleacher|overtime|barstool|complex|tmzsports)/.test(h)) return "Sports";
-  if (/(news|bbc|cnn|reuters|bloomberg|economist|guardian|times|forbes|techcrunch|business|fortune|ap|wsj|washingtonpost)/.test(h)) return "News";
+  if (/(dizi|trkseries|tvlegendstr)/.test(h)) return "Dizi";
+  if (/(film|beyazperde|boxoffice)/.test(h)) return "Film";
+  if (/sinema/.test(h)) return "Sinema";
+  if (/(sports|football|soccer|league|nfl|nba|mlb|nhl|ufc|f1|motogp|wwe|champions|uefa|fifa|mls|nwsl|golazo|dazn|bein|espn|goal|bleacher|overtime|barstool|complex|tmzsports|spor|mackolik|fotomac|futbol|transfer|besiktas|fenerbahce|galatasaray|trabzon|superlig|tff|euroleague|basket|voleybol|premier|laliga|bundesliga|seriea|europaleague|lakers|warriors|houseofhighlights|socrates|fanatik|ajans|goalcomtr|ntvspor|aspor|bptspor|trtspor)/.test(h)) return "Sports";
+  if (/(news|bbc|cnn|reuters|bloomberg|economist|guardian|times|forbes|techcrunch|business|fortune|ap|wsj|washingtonpost|bpthaber|haber)/.test(h)) return "News";
   if (/(nasa|esa|spacex|spaceexplored|physics|astronomy|sciencealert|iflscience|discovery|sciencechannel|curiosity|persevere|wonderofscience)/.test(h)) return "Science";
   if (/(nature|earthpix|earthfocus|earthofficial|wildlife|animalkingdom|natgeowild|bbcearth|natgeoanimals|earth|planet)/.test(h)) return "Nature";
   if (/(ign|gamespot|gameinformer|playstation|xbox|nintendo|steam|epicgames|riotgames|fortnite|pubg|apex|overwatch|rocketleague|esports|gaming|kotaku|polygon|pcgamer|dexerto|hltv|esl|blast|faceit|rockstar|bethesda|activision|blizzard|valorant|leagueoflegends|callofduty)/.test(h)) return "Gaming";
@@ -349,7 +448,7 @@ function getCategory(handle) {
 
 function getTier(handle, category) {
   const h = handle.toLowerCase();
-  if (category === "Sports" && /^(433|goal|bleacherreport|houseofhighlights|sportscenter|nfl|nba|espn)$/.test(h)) return 1;
+  if (category === "Sports" && /^(433|goal|bleacherreport|houseofhighlights|sportscenter|nfl|nba|espn|besiktas|fenerbahce|galatasaraysk|trabzonspor|superlig|nba|championsleague|europaleague)$/.test(h)) return 1;
   if (category === "Viral" && /^(pubity|historyinmemes|rainmaker|failarmy|beamazed|memes)$/.test(h)) return 1;
   if (category === "Science" && /^(nasa|spacex|natgeo)$/.test(h)) return 1;
   return 2;
