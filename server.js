@@ -1430,6 +1430,13 @@ app.post("/clear-drafts", async (req, res) => {
     return res.status(400).json({ ok: false, error: "status rejected veya posted olmali" });
   }
   try {
+    if (status === "rejected") {
+      await pool.query(
+        `INSERT INTO rejected_tweet_ids (tweet_id)
+         SELECT tweet_id FROM drafts WHERE status = 'rejected'
+         ON CONFLICT (tweet_id) DO NOTHING`
+      );
+    }
     const r = await pool.query(`DELETE FROM drafts WHERE status = $1`, [status]);
     res.json({ ok: true, deletedCount: r.rowCount });
   } catch (e) {

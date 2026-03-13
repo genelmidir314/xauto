@@ -93,6 +93,12 @@ async function init() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS rejected_tweet_ids (
+      tweet_id TEXT PRIMARY KEY
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS schedule_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       active_start_hour INTEGER NOT NULL,

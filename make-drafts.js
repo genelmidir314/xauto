@@ -277,6 +277,7 @@ async function run() {
     FROM tweets t
     LEFT JOIN drafts d ON d.tweet_id = t.tweet_id
     WHERE d.tweet_id IS NULL
+      AND t.tweet_id NOT IN (SELECT tweet_id FROM rejected_tweet_ids)
       AND t.has_media = true
       AND t.text IS NOT NULL
       AND length(trim(t.text)) > 0

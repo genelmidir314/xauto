@@ -29,6 +29,13 @@ async function run() {
     const tweetsRes = await client.query("DELETE FROM tweets");
     const collectorRunsRes = await client.query("DELETE FROM collector_runs");
     const sourcePerfRes = await client.query("DELETE FROM source_performance");
+    let rejectedCount = 0;
+    try {
+      const rejectedRes = await client.query("DELETE FROM rejected_tweet_ids");
+      rejectedCount = rejectedRes.rowCount;
+    } catch (_) {
+      // Tablo yoksa (migration calismadi) atla
+    }
 
     await client.query("COMMIT");
 
@@ -39,6 +46,7 @@ async function run() {
     console.log(`   tweets: ${tweetsRes.rowCount}`);
     console.log(`   collector_runs (Collector Trend): ${collectorRunsRes.rowCount}`);
     console.log(`   source_performance: ${sourcePerfRes.rowCount}`);
+    console.log(`   rejected_tweet_ids: ${rejectedCount}`);
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

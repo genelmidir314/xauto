@@ -143,6 +143,12 @@ async function migrate() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS rejected_tweet_ids (
+      tweet_id TEXT PRIMARY KEY
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS source_performance (
       source_id INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
       last_run_at TIMESTAMP,
