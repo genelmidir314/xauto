@@ -1549,6 +1549,31 @@ app.post("/queue/:id/cancel", async (req, res) => {
   }
 });
 
+app.post("/queue/:id/retry", async (req, res) => {
+  const id = Number(req.params.id);
+
+  try {
+    const q = await pool.query(
+      `SELECT id, status FROM queue WHERE id = $1`,
+      [id]
+    );
+    if (q.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "Queue kaydi bulunamadi" });
+    }
+    if (q.rows[0].status !== "failed") {
+      return res.status(400).json({ ok: false, error: "Sadece failed kayitlar yeniden siraya alinabilir" });
+    }
+    await pool.query(
+      `UPDATE queue SET status = 'waiting', last_error = NULL, attempts = 0, scheduled_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+    const dashboard = await getDashboardStats();
+    res.json({ ok: true, dashboard });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // =====================
 // UI
 // =====================

@@ -374,7 +374,13 @@ function renderInboxActions(row, previewLength, helpers) {
       '<button type="button" class="btn btnReject" data-action="reject">Reject</button>'
     );
   } else if (row.status === "approved" && row.queue_id) {
-    if (row.queue_status !== "processing") {
+    if (row.queue_status === "failed") {
+      buttons.splice(
+        1,
+        0,
+        `<button type="button" class="btn btnSave" data-action="retryQueue" data-queue-id="${esc ? esc(String(row.queue_id)) : row.queue_id}">Yeniden siraya al</button>`
+      );
+    } else if (row.queue_status !== "processing") {
       buttons.splice(
         1,
         0,
@@ -390,7 +396,9 @@ function renderInboxActions(row, previewLength, helpers) {
         row.status === "approved"
           ? (row.queue_status === "processing"
               ? "Paylasiliyor; iptal edilemez."
-              : "Sirada. Iptal ile cikarilabilir.")
+              : row.queue_status === "failed"
+                ? "Hata alindi. Yeniden siraya al ile tekrar denenecek."
+                : "Sirada. Iptal ile cikarilabilir.")
           : sourceLinkFallback
           ? "Source link fallback: medya yuklenmeden kaynak tweet linkiyle paylasilir."
           : mediaBlocked

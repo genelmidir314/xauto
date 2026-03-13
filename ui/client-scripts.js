@@ -402,6 +402,13 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
               "success"
             );
             location.reload();
+          } else if (action === "retryQueue") {
+            const queueId = card.dataset.queueId || button.dataset.queueId;
+            if (!queueId) throw new Error("Sira ID bulunamadi");
+            result = await sendJson("/queue/" + queueId + "/retry", {});
+            if (!result.ok) throw new Error(result.error || "Yeniden siraya alma basarisiz");
+            setMessage(card, "Yeniden siraya alindi. Poster worker kisa sure icinde deneyecek.", "success");
+            location.reload();
           } else if (action === "regenerate-comment") {
             result = await sendJson("/drafts/" + id + "/regenerate-comment", {});
             if (!result.ok) throw new Error(result.error || "Yorum uretilemedi");
