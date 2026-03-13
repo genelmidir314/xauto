@@ -1563,9 +1563,11 @@ app.post("/queue/:id/retry", async (req, res) => {
     if (q.rows[0].status !== "failed") {
       return res.status(400).json({ ok: false, error: "Sadece failed kayitlar yeniden siraya alinabilir" });
     }
+    const scheduleSettings = await getScheduleSettings(pool);
+    const nextSlot = await getNextSlotForDisplay(scheduleSettings);
     await pool.query(
-      `UPDATE queue SET status = 'waiting', last_error = NULL, attempts = 0, scheduled_at = NOW(), updated_at = NOW() WHERE id = $1`,
-      [id]
+      `UPDATE queue SET status = 'waiting', last_error = NULL, attempts = 0, scheduled_at = $2, updated_at = NOW() WHERE id = $1`,
+      [id, nextSlot]
     );
     const dashboard = await getDashboardStats();
     res.json({ ok: true, dashboard });
