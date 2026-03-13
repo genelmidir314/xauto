@@ -1362,6 +1362,22 @@ app.post("/drafts/bulk-approve", async (req, res) => {
   }
 });
 
+app.post("/drafts/bulk-reject", async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  if (ids.length === 0) return res.json({ ok: true, rejectedCount: 0 });
+
+  try {
+    await pool.query(`DELETE FROM queue WHERE draft_id = ANY($1::int[])`, [ids]);
+    const r = await pool.query(
+      `UPDATE drafts SET status = 'rejected' WHERE id = ANY($1::int[]) AND status = 'pending' RETURNING id`,
+      [ids]
+    );
+    res.json({ ok: true, rejectedCount: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post("/drafts/:id/regenerate-comment", async (req, res) => {
   const id = Number(req.params.id);
   try {

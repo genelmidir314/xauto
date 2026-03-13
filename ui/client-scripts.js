@@ -482,6 +482,27 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
           return;
         }
 
+        const bulkRejectBtn = event.target.closest('[data-action="bulk-reject"]');
+        if (bulkRejectBtn) {
+          const cards = document.querySelectorAll(".draftCard");
+          const ids = Array.from(cards).map((c) => c.dataset.id).filter(Boolean).map(Number);
+          if (ids.length === 0) {
+            alert("Sayfada reject edilecek draft yok.");
+            return;
+          }
+          if (!confirm("Sayfadaki " + ids.length + " draft rejected yapilsin mi?")) return;
+          bulkRejectBtn.disabled = true;
+          try {
+            const r = await sendJson("/drafts/bulk-reject", { ids });
+            if (!r.ok) throw new Error(r.error || "bulk reject failed");
+            location.reload();
+          } catch (e) {
+            alert(e.message || "Reject All basarisiz.");
+            bulkRejectBtn.disabled = false;
+          }
+          return;
+        }
+
         const clearRejectedBtn = event.target.closest('[data-action="clear-rejected"]');
         if (clearRejectedBtn) {
           if (!confirm("Rejected listesindeki tum kayitlar silinecek. Emin misiniz?")) return;
