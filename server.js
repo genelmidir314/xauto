@@ -47,6 +47,7 @@ const {
   getCollectorMetricsSummary,
 } = require("./collector-metrics");
 const { ensureTweetMediaValidationSchema } = require("./tweet-media-validation");
+const { ensureNewsSchema } = require("./ensure-news-schema");
 const { generateComment } = require("./lib/openai-comment");
 const { renderPageShell } = require("./ui/common");
 const { renderInboxPage } = require("./ui/inbox-page");
@@ -2428,6 +2429,7 @@ async function startServer() {
   await ensureSourcesManagementSchema(pool);
   await ensureCollectorMetricsSchema(pool);
   await ensureTweetMediaValidationSchema(pool);
+  await ensureNewsSchema(pool);
   app.listen(PORT, () => {
     console.log(`Server çalışıyor: http://localhost:${PORT}`);
     console.log(
