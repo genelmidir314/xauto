@@ -957,21 +957,35 @@ function renderNewsClientScript() {
           del.disabled=false;
           return;
         }
+        const saveDraft=e.target.closest('[data-action="save-news-draft"]');
+        if(saveDraft){
+          const row=saveDraft.closest("tr");
+          const id=saveDraft.dataset.id;
+          const textEl=row?.querySelector('[data-field="post-text"]');
+          const text=textEl?.value?.trim()??"";
+          if(text.length>280){setMsg("Metin 280 karakterden uzun","error");return;}
+          saveDraft.disabled=true;
+          try{
+            const r=await sendJson("/news-drafts/"+id+"/save",{post_text:text});
+            if(!r.ok)throw new Error(r.error||"Kaydetme basarisiz");
+            setMsg("Kaydedildi.","success");
+          }catch(err){setMsg(err.message||"Hata","error");}
+          saveDraft.disabled=false;
+          return;
+        }
         const postNow=e.target.closest('[data-action="post-news-now"]');
         if(postNow){
           const id=postNow.dataset.id;
+          const row=postNow.closest("tr");
+          const textEl=row?.querySelector('[data-field="post-text"]');
+          const postText=textEl?.value?.trim()??"";
           if(!confirm("Bu post simdi paylasilsin mi?"))return;
           postNow.disabled=true;
           try{
-            const r=await sendJson("/news-drafts/"+id+"/post-now",{});
+            const r=await sendJson("/news-drafts/"+id+"/post-now",{post_text:postText});
             if(!r.ok)throw new Error(r.error||"Paylasim basarisiz");
             setMsg("Paylasildi. x_post_id="+(r.xPostId||"?"),"success");
-            const row=postNow.closest("tr");
-            if(row){
-              const pill=row.querySelector(".pill");
-              if(pill){pill.textContent="posted";pill.className="pill posted";}
-              postNow.remove();
-            }
+            setTimeout(()=>location.reload(), 600);
           }catch(err){setMsg(err.message||"Hata","error");postNow.disabled=false;}
           return;
         }

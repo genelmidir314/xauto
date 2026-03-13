@@ -49,15 +49,20 @@ function renderNewsDraftsCard(drafts, helpers) {
         const mediaHtml = hasMedia
           ? `<div class="mediaItem" style="margin-top:6px;"><img class="mediaImg" src="${esc(d.media_url)}" alt="" style="max-width:120px;max-height:80px;object-fit:cover;border-radius:8px;" /></div>`
           : "";
+        const isPending = d.status === "pending";
+        const contentCell = isPending
+          ? `<textarea data-field="post-text" class="input" rows="4" style="width:100%;max-width:420px;min-height:80px;resize:vertical;" placeholder="Post metni (max 280 karakter)">${esc(d.post_text || "")}</textarea>`
+          : `<div style="white-space:pre-wrap;word-break:break-word;max-width:420px;">${esc(d.post_text || "")}</div>`;
         return `
       <tr data-news-draft-id="${d.id}">
-        <td style="max-width:400px;vertical-align:top;">
-          <div>${esc((d.post_text || "").slice(0, 140))}${(d.post_text || "").length > 140 ? "..." : ""}</div>
+        <td style="max-width:440px;vertical-align:top;">
+          <div class="draftPostContent">${contentCell}</div>
           ${mediaHtml}
         </td>
         <td><span class="pill ${d.status}">${esc(d.status)}</span></td>
         <td>
-          ${d.status === "pending" ? `
+          ${isPending ? `
+            <button class="btn btnSave" data-action="save-news-draft" data-id="${esc(d.id)}">Kaydet</button>
             <button class="btn btnNow" data-action="post-news-now" data-id="${esc(d.id)}">Post Now</button>
             <button class="btn btnReject" data-action="delete-news-draft" data-id="${esc(d.id)}">Sil</button>
           ` : ""}

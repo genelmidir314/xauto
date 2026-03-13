@@ -2079,6 +2079,27 @@ app.post("/news-drafts/:id/post-now", async (req, res) => {
   }
 });
 
+app.post("/news-drafts/:id/save", async (req, res) => {
+  const id = Number(req.params.id);
+  const { post_text } = req.body || {};
+  try {
+    const text = String(post_text || "").trim();
+    if (text.length > 280) {
+      return res.status(400).json({ ok: false, error: "Metin 280 karakterden uzun" });
+    }
+    const r = await pool.query(
+      `UPDATE news_drafts SET post_text = $2 WHERE id = $1 AND status = 'pending' RETURNING id`,
+      [id, text || ""]
+    );
+    if (r.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "Draft bulunamadi veya duzenlenemez" });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post("/news-drafts/:id/delete", async (req, res) => {
   const id = Number(req.params.id);
   try {
