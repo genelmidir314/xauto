@@ -37,30 +37,67 @@ function looksTurkish(text) {
   return /[çğıöşüÇĞİÖŞÜ]/.test(s) || /\b(ve|bir|bu|çok|ama|gibi|neden|nasıl|mi|mı|mu|mü)\b/i.test(s);
 }
 
-function scoreVirality(sourceHandle, text, hasMedia) {
-  let score = 50;
+function scoreVirality(sourceHandle, text, hasMedia, options = {}) {
+  const like = Math.max(0, Number(options.like_count) || 0);
+  const retweet = Math.max(0, Number(options.repost_count) || 0);
+  const reply = Math.max(0, Number(options.reply_count) || 0);
+  const tweetCreatedAt = options.tweet_created_at;
+
+  let score = 35;
   const reasons = [];
+
+  // engagement_velocity * 3: (like + retweet*2 + reply*2) / hours, log-normalized
+  const totalEngagement = like + retweet * 2 + reply * 2;
+  const hoursSincePost = tweetCreatedAt
+    ? (Date.now() - new Date(tweetCreatedAt).getTime()) / (1000 * 60 * 60)
+    : 24;
+  const velocity = hoursSincePost > 0.1 ? totalEngagement / Math.max(0.1, hoursSincePost) : 0;
+  const velocityScore = Math.min(12, Math.log10(1 + velocity) * 3);
+  if (velocityScore > 0) {
+    score += velocityScore;
+    reasons.push("velocity");
+  }
+
+  // retweet_count * 2 + reply_count * 2: engagement component, log-normalized
+  const engagementRaw = retweet * 2 + reply * 2 + like;
+  const engagementScore = Math.min(10, Math.log10(1 + engagementRaw) * 3);
+  if (engagementScore > 0) {
+    score += engagementScore;
+    reasons.push("engagement");
+  }
+
+  // video_bonus
+  if (hasMedia) {
+    score += 15;
+    reasons.push("media");
+  }
+  score += 5;
+  reasons.push("video_bonus");
+
+  // recency_bonus: son 24h +10, son 72h +5
+  if (hoursSincePost < 24) {
+    score += 10;
+    reasons.push("recency_24h");
+  } else if (hoursSincePost < 72) {
+    score += 5;
+    reasons.push("recency_72h");
+  }
 
   const t = cleanupTweetText(text);
   const h = String(sourceHandle || "").toLowerCase();
 
-  if (hasMedia) {
-    score += 20;
-    reasons.push("media");
-  }
-
   if (t.length >= 25 && t.length <= 180) {
-    score += 10;
+    score += 8;
     reasons.push("ideal_length");
   }
 
   if (/\?/.test(t)) {
-    score += 5;
+    score += 4;
     reasons.push("question");
   }
 
   if (/\d/.test(t)) {
-    score += 5;
+    score += 4;
     reasons.push("numbers");
   }
 
@@ -71,7 +108,7 @@ function scoreVirality(sourceHandle, text, hasMedia) {
     h.includes("goal") ||
     h.includes("433")
   ) {
-    score += 10;
+    score += 8;
     reasons.push("sports");
   }
 
@@ -80,7 +117,7 @@ function scoreVirality(sourceHandle, text, hasMedia) {
     h.includes("history") ||
     h.includes("figen")
   ) {
-    score += 8;
+    score += 6;
     reasons.push("viral_source");
   }
 
@@ -89,12 +126,11 @@ function scoreVirality(sourceHandle, text, hasMedia) {
     h.includes("sama") ||
     h.includes("ylecun")
   ) {
-    score += 6;
+    score += 5;
     reasons.push("tech_source");
   }
 
-  if (score > 100) score = 100;
-  if (score < 0) score = 0;
+  score = Math.max(0, Math.min(100, Math.round(score)));
 
   return {
     score,
@@ -273,7 +309,10 @@ async function run() {
       t.has_media,
       t.media,
       t.x_url,
-      t.tweet_created_at
+      t.tweet_created_at,
+      t.like_count,
+      t.repost_count,
+      t.reply_count
     FROM tweets t
     LEFT JOIN drafts d ON d.tweet_id = t.tweet_id
     WHERE d.tweet_id IS NULL
@@ -307,7 +346,12 @@ async function run() {
       continue;
     }
 
-    const viral = scoreVirality(sourceHandle, originalText, hasMedia);
+    const viral = scoreVirality(sourceHandle, originalText, hasMedia, {
+      like_count: row.like_count,
+      repost_count: row.repost_count,
+      reply_count: row.reply_count,
+      tweet_created_at: row.tweet_created_at,
+    });
     const shouldUseSourceLinkFallback =
       (!mediaInspection.ok || !mediaInspection.candidate) &&
       viral.score >= FALLBACK_LINK_SCORE_THRESHOLD &&
