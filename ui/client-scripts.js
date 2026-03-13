@@ -975,6 +975,19 @@ function renderNewsClientScript() {
           }catch(err){setMsg(err.message||"Hata","error");postNow.disabled=false;}
           return;
         }
+        const delDraft=e.target.closest('[data-action="delete-news-draft"]');
+        if(delDraft){
+          const id=delDraft.dataset.id;
+          if(!confirm("Bu draft silinsin mi? Silinen haberler tekrar draft olarak uretilmez."))return;
+          delDraft.disabled=true;
+          try{
+            const r=await sendJson("/news-drafts/"+id+"/delete",{});
+            if(!r.ok)throw new Error(r.error||"Silinemedi");
+            delDraft.closest("tr")?.remove();
+            setMsg("Draft silindi.","success");
+          }catch(err){setMsg(err.message||"Hata","error");delDraft.disabled=false;}
+          return;
+        }
       });
     })();
   </script>`;

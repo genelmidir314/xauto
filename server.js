@@ -2035,7 +2035,10 @@ app.post("/news-drafts/:id/post-now", async (req, res) => {
   const { post_text } = req.body || {};
   try {
     const draft = await pool.query(
-      `SELECT id, post_text, status FROM news_drafts WHERE id = $1`,
+      `SELECT d.id, d.post_text, d.status, i.media_url
+       FROM news_drafts d
+       LEFT JOIN news_items i ON i.id = d.item_id
+       WHERE d.id = $1`,
       [id]
     );
     if (draft.rows.length === 0) {
@@ -2052,7 +2055,18 @@ app.post("/news-drafts/:id/post-now", async (req, res) => {
     if (text.length > 280) {
       return res.status(400).json({ ok: false, error: "Metin 280 karakterden uzun" });
     }
-    const posted = await xPostTweet(text, []);
+    let mediaIds = [];
+    const mediaUrl = row.media_url?.trim();
+    if (mediaUrl) {
+      try {
+        const mediaArray = [{ type: "photo", url: mediaUrl }];
+        const uploaded = await uploadMediaFromStoredMedia(mediaArray, X_AUTH);
+        if (uploaded?.mediaId) mediaIds = [uploaded.mediaId];
+      } catch (mediaErr) {
+        console.warn("News media upload failed:", mediaErr?.message);
+      }
+    }
+    const posted = await xPostTweet(text, mediaIds);
     const xId = posted?.id || null;
     await pool.query(
       `UPDATE news_drafts SET status = 'posted', posted_at = NOW(), x_post_id = $2 WHERE id = $1`,
@@ -2064,14 +2078,32 @@ app.post("/news-drafts/:id/post-now", async (req, res) => {
   }
 });
 
+app.post("/news-drafts/:id/delete", async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const r = await pool.query(
+      `UPDATE news_drafts SET status = 'deleted' WHERE id = $1 AND status IN ('pending','posted') RETURNING id`,
+      [id]
+    );
+    if (r.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "Draft bulunamadi veya zaten silindi" });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/news-ui", async (req, res) => {
   try {
     const [sourcesRes, draftsRes, countsRes] = await Promise.all([
       pool.query("SELECT id, name, feed_url, last_fetch_at FROM news_sources ORDER BY id"),
       pool.query(
-        `SELECT id, post_text, status FROM news_drafts
-         WHERE status IN ('pending','posted')
-         ORDER BY created_at DESC LIMIT 30`
+        `SELECT d.id, d.post_text, d.status, d.item_id, i.media_url, i.title AS item_title
+         FROM news_drafts d
+         LEFT JOIN news_items i ON i.id = d.item_id
+         WHERE d.status IN ('pending','posted')
+         ORDER BY d.created_at DESC LIMIT 30`
       ),
       pool.query(
         `SELECT

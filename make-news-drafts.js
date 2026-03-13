@@ -59,8 +59,11 @@ async function run() {
   );
 
   const items = await pool.query(
-    `SELECT id, title, link, summary FROM news_items
-     ORDER BY fetched_at DESC LIMIT 50`
+    `SELECT id, title, link, summary FROM news_items n
+     WHERE n.id NOT IN (
+       SELECT item_id FROM news_drafts WHERE item_id IS NOT NULL
+     )
+     ORDER BY n.fetched_at DESC LIMIT 50`
   );
 
   if (items.rows.length === 0) {

@@ -228,6 +228,7 @@ async function init() {
       title TEXT NOT NULL,
       link TEXT,
       summary TEXT,
+      media_url TEXT,
       fetched_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE(link)
     );

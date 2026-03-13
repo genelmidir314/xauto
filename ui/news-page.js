@@ -44,16 +44,29 @@ function renderNewsDraftsCard(drafts, helpers) {
   const { esc } = helpers;
   const rows = (drafts || [])
     .map(
-      (d) => `
+      (d) => {
+        const hasMedia = !!d.media_url?.trim();
+        const mediaHtml = hasMedia
+          ? `<div class="mediaItem" style="margin-top:6px;"><img class="mediaImg" src="${esc(d.media_url)}" alt="" style="max-width:120px;max-height:80px;object-fit:cover;border-radius:8px;" /></div>`
+          : "";
+        return `
       <tr data-news-draft-id="${d.id}">
-        <td style="max-width:320px;">${esc((d.post_text || "").slice(0, 120))}${(d.post_text || "").length > 120 ? "..." : ""}</td>
+        <td style="max-width:400px;vertical-align:top;">
+          <div>${esc((d.post_text || "").slice(0, 140))}${(d.post_text || "").length > 140 ? "..." : ""}</div>
+          ${mediaHtml}
+        </td>
         <td><span class="pill ${d.status}">${esc(d.status)}</span></td>
         <td>
           ${d.status === "pending" ? `
             <button class="btn btnNow" data-action="post-news-now" data-id="${esc(d.id)}">Post Now</button>
+            <button class="btn btnReject" data-action="delete-news-draft" data-id="${esc(d.id)}">Sil</button>
+          ` : ""}
+          ${d.status === "posted" ? `
+            <button class="btn btnReject" data-action="delete-news-draft" data-id="${esc(d.id)}">Sil</button>
           ` : ""}
         </td>
-      </tr>`
+      </tr>`;
+      }
     )
     .join("");
 
