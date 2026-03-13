@@ -140,6 +140,22 @@ function renderSourceManagementScriptBody() {
       });
 
       document.addEventListener("click", async (event) => {
+        const removeFailedBtn = event.target.closest('[data-action="remove-failed-sources"]');
+        if (removeFailedBtn) {
+          if (!confirm("resolve_status='failed' olan tum kaynaklar silinecek. Emin misiniz?")) return;
+          removeFailedBtn.disabled = true;
+          try {
+            const r = await sendJson("/sources/remove-failed", {});
+            if (!r.ok) throw new Error(r.error || "Basarisiz");
+            setSourceMessage((r.deletedCount ?? 0) + " failed kaynak silindi. Sayfa yenileniyor...", "success");
+            setTimeout(() => location.reload(), 800);
+          } catch (e) {
+            setSourceMessage(e.message || "Hata", "error");
+            removeFailedBtn.disabled = false;
+          }
+          return;
+        }
+
         const button = event.target.closest('button[data-action="delete-source"]');
         if (!button) return;
         if (!confirm("Bu kaynak silinsin mi?")) return;

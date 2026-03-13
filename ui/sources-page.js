@@ -136,7 +136,13 @@ function renderSourceSummaryCard(collectorMetrics, helpers) {
         <div class="stack">
           <div class="meta"><span>resolved</span><b>${esc(totals.resolved_sources ?? 0)}</b></div>
           <div class="meta"><span>pending</span><b>${esc(totals.pending_sources ?? 0)}</b></div>
-          <div class="meta"><span>failed</span><b>${esc(totals.failed_sources ?? 0)}</b></div>
+          <div class="meta">
+            <span>failed</span>
+            <b>${esc(totals.failed_sources ?? 0)}</b>
+            ${(totals.failed_sources ?? 0) > 0
+              ? `<button class="btn btnReject" type="button" data-action="remove-failed-sources" style="margin-left:8px;">Failed'lari cikar</button>`
+              : ""}
+          </div>
         </div>
       </div>
       <div class="card compact">

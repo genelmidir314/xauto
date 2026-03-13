@@ -1166,6 +1166,17 @@ app.post("/sources/:id/delete", async (req, res) => {
   }
 });
 
+app.post("/sources/remove-failed", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `DELETE FROM sources WHERE resolve_status = 'failed' RETURNING id, handle`
+    );
+    res.json({ ok: true, deletedCount: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post("/schedule-settings", async (req, res) => {
   try {
     const scheduleSettings = await updateScheduleSettings(pool, req.body || {});
