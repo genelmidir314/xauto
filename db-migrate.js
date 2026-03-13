@@ -175,7 +175,6 @@ async function migrate() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
-  await pool.query(`ALTER TABLE news_items ADD COLUMN IF NOT EXISTS media_url TEXT`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS news_items (
       id SERIAL PRIMARY KEY,
@@ -188,6 +187,7 @@ async function migrate() {
       UNIQUE(link)
     );
   `);
+  await pool.query(`ALTER TABLE news_items ADD COLUMN IF NOT EXISTS media_url TEXT`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS news_drafts (
       id SERIAL PRIMARY KEY,

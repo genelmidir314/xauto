@@ -71,6 +71,14 @@ Mevcut DB'ye yeni kolonlar eklemek için:
 node db-migrate.js
 ```
 
+**Render / Gündem sayfası:** Gündem modülü (`/news-ui`) için `news_sources`, `news_items`, `news_drafts` tabloları gerekir. Deploy sonrası Gündem sayfası açılmıyorsa, production DB'ye migration çalıştırın:
+
+```bash
+DATABASE_URL="postgresql://..." node db-migrate.js
+```
+
+(Render Environment'taki `DATABASE_URL` değerini kullanın)
+
 ### 5. pm2 ile Başlat
 
 ```bash
