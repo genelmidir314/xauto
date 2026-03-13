@@ -200,7 +200,16 @@ async function migrate() {
   await pool.query(`
     INSERT INTO news_sources (name, feed_url) VALUES
       ('BBC World', 'https://feeds.bbci.co.uk/news/world/rss.xml'),
-      ('Reuters', 'https://feeds.reuters.com/reuters/topNews')
+      ('Reuters', 'https://feeds.reuters.com/reuters/topNews'),
+      ('Anadolu Ajansi', 'https://www.aa.com.tr/tr/rss/default?cat=guncel'),
+      ('CNN Turk', 'https://www.cnnturk.com/feed/rss/turkiye'),
+      ('Haberler.com', 'https://www.haberler.com/rss/'),
+      ('T24', 'https://www.t24.com.tr/rss/haberler'),
+      ('Haber3', 'https://www.haber3.com/rss'),
+      ('Vatan', 'https://gazetevatan.com/rss/gundem.xml'),
+      ('A Haber', 'https://www.ahaber.com.tr/rss/gundem.xml'),
+      ('Sol', 'https://haber.sol.org.tr/rss.xml'),
+      ('10haber', 'https://10haber.net/feed/')
     ON CONFLICT (feed_url) DO NOTHING
   `);
 
