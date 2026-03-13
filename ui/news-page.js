@@ -53,10 +53,19 @@ function renderNewsDraftsCard(drafts, helpers) {
         const contentCell = isPending
           ? `<textarea data-field="post-text" class="input" rows="4" style="width:100%;max-width:420px;min-height:80px;resize:vertical;" placeholder="Post metni (max 280 karakter)">${esc(d.post_text || "")}</textarea>`
           : `<div style="white-space:pre-wrap;word-break:break-word;max-width:420px;">${esc(d.post_text || "")}</div>`;
+        const itemLink = (d.item_link || "").trim();
+        const sourceName = (d.source_name || "").trim();
+        const sourceLabel = sourceName || (itemLink ? (() => { try { return new URL(itemLink).hostname; } catch(e) { return "Haber"; } })() : "");
+        const sourceHtml = (itemLink || sourceLabel)
+          ? `<div style="margin-top:6px;font-size:12px;" class="muted">Kaynak: ${itemLink
+              ? `<a href="${esc(itemLink)}" target="_blank" rel="noopener">${esc(sourceLabel || "Haber")}</a>`
+              : esc(sourceLabel)}</div>`
+          : "";
         return `
       <tr data-news-draft-id="${d.id}">
         <td style="max-width:440px;vertical-align:top;">
           <div class="draftPostContent">${contentCell}</div>
+          ${sourceHtml}
           ${mediaHtml}
         </td>
         <td><span class="pill ${d.status}">${esc(d.status)}</span></td>

@@ -2121,9 +2121,10 @@ app.get("/news-ui", async (req, res) => {
     const [sourcesRes, draftsRes, countsRes] = await Promise.all([
       pool.query("SELECT id, name, feed_url, last_fetch_at FROM news_sources ORDER BY id"),
       pool.query(
-        `SELECT d.id, d.post_text, d.status, d.item_id, i.media_url, i.title AS item_title
+        `SELECT d.id, d.post_text, d.status, d.item_id, i.media_url, i.title AS item_title, i.link AS item_link, s.name AS source_name
          FROM news_drafts d
          LEFT JOIN news_items i ON i.id = d.item_id
+         LEFT JOIN news_sources s ON s.id = i.source_id
          WHERE d.status IN ('pending','posted')
          ORDER BY d.created_at DESC LIMIT 30`
       ),
