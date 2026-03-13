@@ -88,6 +88,7 @@ function renderReplyPage({ sources, drafts, helpers, counts }) {
           { href: "/inbox", label: "Inbox" },
           { href: "/sources-ui", label: "Sources" },
           { href: "/collector-ui", label: "Collector" },
+          { href: "/news-ui", label: "Gundem" },
           { href: "/follow-ui", label: "Takip" },
           { href: "/history-ui", label: "History" },
         ],

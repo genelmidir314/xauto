@@ -211,6 +211,48 @@ async function init() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_sources (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      feed_url TEXT NOT NULL UNIQUE,
+      active BOOLEAN NOT NULL DEFAULT true,
+      last_fetch_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_items (
+      id SERIAL PRIMARY KEY,
+      source_id INTEGER REFERENCES news_sources(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      link TEXT,
+      summary TEXT,
+      fetched_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE(link)
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_drafts (
+      id SERIAL PRIMARY KEY,
+      item_id INTEGER REFERENCES news_items(id) ON DELETE CASCADE,
+      post_text TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      posted_at TIMESTAMP,
+      x_post_id TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    INSERT INTO news_sources (name, feed_url) VALUES
+      ('BBC World', 'https://feeds.bbci.co.uk/news/world/rss.xml'),
+      ('Reuters', 'https://feeds.reuters.com/reuters/topNews')
+    ON CONFLICT (feed_url) DO NOTHING
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS source_performance (
       source_id INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
       last_run_at TIMESTAMP,

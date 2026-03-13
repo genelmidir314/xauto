@@ -535,6 +535,7 @@ function renderInboxPage({
           { href: "/sources-ui", label: "Sources UI" },
           { href: "/collector-ui", label: "Collector UI" },
           { href: "/reply-ui", label: "Reply" },
+          { href: "/news-ui", label: "Gundem" },
           { href: "/follow-ui", label: "Takip" },
           { href: "/history-ui", label: "History UI" },
         ],

@@ -178,6 +178,7 @@ function renderSourcesPage({ sources, tierCheckIntervals, collectorMetrics, help
           { href: "/inbox", label: "Inbox" },
           { href: "/collector-ui", label: "Collector UI" },
           { href: "/reply-ui", label: "Reply" },
+          { href: "/news-ui", label: "Gundem" },
           { href: "/follow-ui", label: "Takip" },
           { href: "/history-ui", label: "History UI" },
           { href: "/sources", label: "Sources JSON", targetBlank: true },

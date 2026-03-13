@@ -886,6 +886,100 @@ function renderReplyClientScript() {
   </script>`;
 }
 
+function renderNewsClientScript() {
+  return `
+  <script>
+    (function(){
+      function qs(s,c){ return (c||document).querySelector(s); }
+      async function sendJson(url,body){
+        const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
+        return r.json();
+      }
+      function setMsg(text,kind){
+        const el=document.getElementById("newsMessage");
+        if(!el)return;
+        el.className="message show "+(kind||"info");
+        el.textContent=text;
+      }
+      function setSourceMsg(text,kind){
+        const el=document.getElementById("newsSourceMessage");
+        if(!el)return;
+        el.className="message show "+(kind||"info");
+        el.textContent=text;
+      }
+      document.addEventListener("submit",async(e)=>{
+        if(e.target?.id==="newsSourceAddForm"){
+          e.preventDefault();
+          const name=(qs("#newsSourceName",e.target)?.value||"").trim();
+          const feedUrl=(qs("#newsSourceFeedUrl",e.target)?.value||"").trim();
+          if(!name||!feedUrl){setSourceMsg("Ad ve URL girin","error");return;}
+          try{
+            const r=await sendJson("/news-sources",{name,feed_url:feedUrl});
+            if(!r.ok)throw new Error(r.error||"Ekleme basarisiz");
+            setSourceMsg("Eklendi. Yenileniyor...","success");
+            setTimeout(()=>location.reload(),600);
+          }catch(err){setSourceMsg(err.message||"Hata","error");}
+        }
+      });
+      document.addEventListener("click",async(e)=>{
+        const runCollector=e.target.closest('[data-action="run-news-collector"]');
+        if(runCollector){
+          runCollector.disabled=true;
+          try{
+            const r=await sendJson("/run-news-collector",{});
+            if(!r.ok)throw new Error(r.error||"Basarisiz");
+            setMsg(r.message||"Baslatildi. Sayfayi yenileyin.","success");
+          }catch(err){setMsg(err.message||"Hata","error");}
+          runCollector.disabled=false;
+          return;
+        }
+        const runDrafts=e.target.closest('[data-action="run-make-news-drafts"]');
+        if(runDrafts){
+          runDrafts.disabled=true;
+          try{
+            const r=await sendJson("/run-make-news-drafts",{});
+            if(!r.ok)throw new Error(r.error||"Basarisiz");
+            setMsg(r.message||"Baslatildi. Sayfayi yenileyin.","success");
+          }catch(err){setMsg(err.message||"Hata","error");}
+          runDrafts.disabled=false;
+          return;
+        }
+        const del=e.target.closest('[data-action="delete-news-source"]');
+        if(del){
+          const id=del.dataset.id;
+          if(!confirm("Silinsin mi?"))return;
+          del.disabled=true;
+          try{
+            const r=await sendJson("/news-sources/"+id+"/delete",{});
+            if(!r.ok)throw new Error(r.error);
+            del.closest("tr")?.remove();
+          }catch(err){setSourceMsg(err.message,"error");}
+          del.disabled=false;
+          return;
+        }
+        const postNow=e.target.closest('[data-action="post-news-now"]');
+        if(postNow){
+          const id=postNow.dataset.id;
+          if(!confirm("Bu post simdi paylasilsin mi?"))return;
+          postNow.disabled=true;
+          try{
+            const r=await sendJson("/news-drafts/"+id+"/post-now",{});
+            if(!r.ok)throw new Error(r.error||"Paylasim basarisiz");
+            setMsg("Paylasildi. x_post_id="+(r.xPostId||"?"),"success");
+            const row=postNow.closest("tr");
+            if(row){
+              const pill=row.querySelector(".pill");
+              if(pill){pill.textContent="posted";pill.className="pill posted";}
+              postNow.remove();
+            }
+          }catch(err){setMsg(err.message||"Hata","error");postNow.disabled=false;}
+          return;
+        }
+      });
+    })();
+  </script>`;
+}
+
 module.exports = {
   renderInboxClientScript,
   renderQueueClientScript,
@@ -893,4 +987,5 @@ module.exports = {
   renderCollectorClientScript,
   renderFollowClientScript,
   renderReplyClientScript,
+  renderNewsClientScript,
 };

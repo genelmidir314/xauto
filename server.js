@@ -55,6 +55,7 @@ const { renderSourcesPage } = require("./ui/sources-page");
 const { renderCollectorPage } = require("./ui/collector-page");
 const { renderFollowPage } = require("./ui/follow-page");
 const { renderReplyPage } = require("./ui/reply-page");
+const { renderNewsPage } = require("./ui/news-page");
 
 const app = express();
 app.use(express.json({ limit: "4mb" }));
@@ -1945,6 +1946,154 @@ app.post("/reply-drafts/:id/reject", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+let newsCollectorRunning = false;
+let newsMakeDraftsRunning = false;
+
+app.get("/news-sources", async (req, res) => {
+  try {
+    const r = await pool.query("SELECT id, name, feed_url, last_fetch_at FROM news_sources ORDER BY id");
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/news-sources", async (req, res) => {
+  try {
+    const { name, feed_url } = req.body || {};
+    if (!name || !feed_url) {
+      return res.status(400).json({ ok: false, error: "name ve feed_url gerekli" });
+    }
+    await pool.query(
+      `INSERT INTO news_sources (name, feed_url) VALUES ($1, $2)
+       ON CONFLICT (feed_url) DO NOTHING`,
+      [String(name).trim(), String(feed_url).trim()]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/news-sources/:id/delete", async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    await pool.query("DELETE FROM news_sources WHERE id = $1", [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/run-news-collector", async (req, res) => {
+  if (newsCollectorRunning) {
+    return res.status(409).json({ ok: false, error: "News collector zaten calisiyor." });
+  }
+  newsCollectorRunning = true;
+  res.json({ ok: true, message: "News collector baslatildi. Tamamlaninca sayfayi yenileyin." });
+  runScript("news-collector.js")
+    .then(() => { newsCollectorRunning = false; })
+    .catch((err) => {
+      newsCollectorRunning = false;
+      console.error("News collector hata:", err?.message || err);
+    });
+});
+
+app.post("/run-make-news-drafts", async (req, res) => {
+  if (newsMakeDraftsRunning) {
+    return res.status(409).json({ ok: false, error: "Make-news-drafts zaten calisiyor." });
+  }
+  newsMakeDraftsRunning = true;
+  res.json({ ok: true, message: "Make-news-drafts baslatildi. Tamamlaninca sayfayi yenileyin." });
+  runScript("make-news-drafts.js")
+    .then(() => { newsMakeDraftsRunning = false; })
+    .catch((err) => {
+      newsMakeDraftsRunning = false;
+      console.error("Make-news-drafts hata:", err?.message || err);
+    });
+});
+
+app.get("/news-drafts", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT d.id, d.post_text, d.status
+       FROM news_drafts d
+       WHERE d.status IN ('pending','posted')
+       ORDER BY d.created_at DESC LIMIT 30`
+    );
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/news-drafts/:id/post-now", async (req, res) => {
+  const id = Number(req.params.id);
+  const { post_text } = req.body || {};
+  try {
+    const draft = await pool.query(
+      `SELECT id, post_text, status FROM news_drafts WHERE id = $1`,
+      [id]
+    );
+    if (draft.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Draft bulunamadi" });
+    }
+    const row = draft.rows[0];
+    if (row.status !== "pending") {
+      return res.status(400).json({ ok: false, error: "Bu draft zaten paylasildi" });
+    }
+    const text = (post_text || row.post_text || "").trim();
+    if (!text) {
+      return res.status(400).json({ ok: false, error: "Post metni bos" });
+    }
+    if (text.length > 280) {
+      return res.status(400).json({ ok: false, error: "Metin 280 karakterden uzun" });
+    }
+    const posted = await xPostTweet(text, []);
+    const xId = posted?.id || null;
+    await pool.query(
+      `UPDATE news_drafts SET status = 'posted', posted_at = NOW(), x_post_id = $2 WHERE id = $1`,
+      [id, xId]
+    );
+    res.json({ ok: true, xPostId: xId });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/news-ui", async (req, res) => {
+  try {
+    const [sourcesRes, draftsRes, countsRes] = await Promise.all([
+      pool.query("SELECT id, name, feed_url, last_fetch_at FROM news_sources ORDER BY id"),
+      pool.query(
+        `SELECT id, post_text, status FROM news_drafts
+         WHERE status IN ('pending','posted')
+         ORDER BY created_at DESC LIMIT 30`
+      ),
+      pool.query(
+        `SELECT
+          (SELECT COUNT(*)::int FROM news_sources WHERE active = true) AS sources,
+          (SELECT COUNT(*)::int FROM news_items) AS items,
+          (SELECT COUNT(*)::int FROM news_drafts WHERE status = 'pending') AS pending,
+          (SELECT COUNT(*)::int FROM news_drafts WHERE status = 'posted') AS posted`
+      ),
+    ]);
+    const counts = countsRes.rows[0] || {};
+    res.send(
+      renderNewsPage({
+        sources: sourcesRes.rows,
+        drafts: draftsRes.rows,
+        helpers: uiHelpers,
+        counts,
+      })
+    );
+  } catch (e) {
+    res
+      .status(500)
+      .send(renderPageShell("Error", `<pre>${esc(e.stack || e.message)}</pre>`));
   }
 });
 

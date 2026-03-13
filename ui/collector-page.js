@@ -133,6 +133,7 @@ function renderCollectorPage({ collectorMetrics, performanceRows, helpers, limit
           { href: "/inbox", label: "Inbox" },
           { href: "/sources-ui", label: "Sources UI" },
           { href: "/reply-ui", label: "Reply" },
+          { href: "/news-ui", label: "Gundem" },
           { href: "/follow-ui", label: "Takip" },
           { href: "/history-ui", label: "History UI" },
           { href: "/collector-metrics", label: "Collector JSON", targetBlank: true },
