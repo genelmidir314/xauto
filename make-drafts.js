@@ -279,6 +279,11 @@ async function run() {
     WHERE d.tweet_id IS NULL
       AND t.tweet_id NOT IN (SELECT tweet_id FROM rejected_tweet_ids)
       AND t.has_media = true
+      AND t.media IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(t.media) AS m(elem)
+        WHERE m.elem->>'type' IN ('video', 'animated_gif')
+      )
       AND t.text IS NOT NULL
       AND length(trim(t.text)) > 0
     ORDER BY t.tweet_created_at DESC NULLS LAST

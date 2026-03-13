@@ -136,6 +136,13 @@ async function run() {
           continue;
         }
 
+        // ✅ SADECE İNDİRİLEBİLİR VİDEO İÇEREN TWEETLERİ AL (fotoğraf hariç)
+        if (mediaInspection.candidate?.type === "photo") {
+          skippedNoMedia += 1;
+          if (!newestId || BigInt(t.id) > BigInt(newestId)) newestId = t.id;
+          continue;
+        }
+
         if (mediaUploadable) {
           runMetrics.mediaTweets += 1;
           runMetrics.draftCandidates += 1;
