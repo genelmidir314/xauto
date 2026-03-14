@@ -132,7 +132,7 @@ async function takeOneDueJob() {
 
 async function loadDraft(draftId) {
   const r = await pool.query(
-    `SELECT d.id, d.tweet_id, d.comment_tr, d.translation_tr, d.format_key, d.status, t.x_url
+    `SELECT d.id, d.tweet_id, d.comment_tr, d.translation_tr, d.use_comment, d.hashtags_tr, d.use_hashtags, d.format_key, d.status, t.x_url
      FROM drafts d
      LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
      WHERE d.id=$1`,
@@ -142,7 +142,8 @@ async function loadDraft(draftId) {
 }
 
 function composeFinalText(d) {
-  return composeDraftText(d.comment_tr, d.translation_tr, d.format_key, d.x_url);
+  const comment = d.use_comment !== false ? d.comment_tr : "";
+  return composeDraftText(comment, d.translation_tr, d.format_key, d.x_url, d.hashtags_tr, d.use_hashtags);
 }
 
 async function isAlreadyPosted(draftId) {

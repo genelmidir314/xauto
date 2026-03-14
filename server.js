@@ -48,7 +48,7 @@ const {
 } = require("./collector-metrics");
 const { ensureTweetMediaValidationSchema } = require("./tweet-media-validation");
 const { ensureNewsSchema } = require("./ensure-news-schema");
-const { generateComment } = require("./lib/openai-comment");
+const { generateComment, generateHashtags } = require("./lib/openai-comment");
 const { renderPageShell } = require("./ui/common");
 const { renderInboxPage } = require("./ui/inbox-page");
 const { renderHistoryPage } = require("./ui/history-page");
@@ -173,8 +173,8 @@ function fmtStatusPill(status) {
   return map[status] || "pill";
 }
 
-function composePreview(comment, translation, formatKey, xUrl) {
-  return composeDraftText(comment, translation, formatKey, xUrl);
+function composePreview(comment, translation, formatKey, xUrl, hashtags, useHashtags) {
+  return composeDraftText(comment, translation, formatKey, xUrl, hashtags, useHashtags);
 }
 
 function formatDateTR(dateValue) {
@@ -699,7 +699,9 @@ function buildFinalTextFromDraft(draft) {
     comment,
     draft.translation_tr,
     draft.format_key,
-    draft.x_url
+    draft.x_url,
+    draft.hashtags_tr,
+    draft.use_hashtags
   );
 }
 
@@ -1412,22 +1414,57 @@ app.post("/drafts/:id/regenerate-comment", async (req, res) => {
   }
 });
 
+app.post("/drafts/:id/regenerate-hashtags", async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const r = await pool.query(
+      `
+      SELECT d.id, d.comment_tr, d.translation_tr, t.text AS original_text
+      FROM drafts d
+      LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
+      WHERE d.id=$1
+      `,
+      [id]
+    );
+    if (r.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "Draft bulunamadi" });
+    }
+    const row = r.rows[0];
+    const hashtagsTr = await generateHashtags(
+      row.comment_tr || "",
+      row.translation_tr || "",
+      row.original_text || ""
+    );
+    await pool.query(
+      `UPDATE drafts SET hashtags_tr=$2 WHERE id=$1`,
+      [id, hashtagsTr]
+    );
+    res.json({ ok: true, hashtags_tr: hashtagsTr });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "Hashtag uretilemedi" });
+  }
+});
+
 app.post("/drafts/:id/save", async (req, res) => {
   const id = Number(req.params.id);
-  const { comment_tr, translation_tr, use_comment } = req.body || {};
+  const { comment_tr, translation_tr, use_comment, hashtags_tr, use_hashtags } = req.body || {};
   const nextComment = normalizeOptionalText(comment_tr);
   const nextTranslation = normalizeOptionalText(translation_tr);
   const useCommentParam = use_comment === undefined ? null : !!use_comment;
+  const nextHashtags = normalizeOptionalText(hashtags_tr);
+  const useHashtagsParam = use_hashtags === undefined ? null : !!use_hashtags;
   try {
     await pool.query(
       `
       UPDATE drafts
       SET comment_tr = COALESCE($2, comment_tr),
           translation_tr = COALESCE($3, translation_tr),
-          use_comment = COALESCE($4, use_comment)
+          use_comment = COALESCE($4, use_comment),
+          hashtags_tr = COALESCE($5, hashtags_tr),
+          use_hashtags = COALESCE($6, use_hashtags)
       WHERE id=$1
       `,
-      [id, nextComment, nextTranslation, useCommentParam]
+      [id, nextComment, nextTranslation, useCommentParam, nextHashtags, useHashtagsParam]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -1475,10 +1512,12 @@ app.post("/clear-drafts", async (req, res) => {
 
 app.post("/drafts/:id/approve-and-queue", async (req, res) => {
   const id = Number(req.params.id);
-  const { comment_tr, translation_tr, use_comment } = req.body || {};
+  const { comment_tr, translation_tr, use_comment, hashtags_tr, use_hashtags } = req.body || {};
   const nextComment = normalizeOptionalText(comment_tr);
   const nextTranslation = normalizeOptionalText(translation_tr);
   const useCommentParam = use_comment === undefined ? null : !!use_comment;
+  const nextHashtags = normalizeOptionalText(hashtags_tr);
+  const useHashtagsParam = use_hashtags === undefined ? null : !!use_hashtags;
 
   try {
     await pool.query(
@@ -1487,10 +1526,12 @@ app.post("/drafts/:id/approve-and-queue", async (req, res) => {
       SET status='approved',
           comment_tr = COALESCE($2, comment_tr),
           translation_tr = COALESCE($3, translation_tr),
-          use_comment = COALESCE($4, use_comment)
+          use_comment = COALESCE($4, use_comment),
+          hashtags_tr = COALESCE($5, hashtags_tr),
+          use_hashtags = COALESCE($6, use_hashtags)
       WHERE id=$1
       `,
-      [id, nextComment, nextTranslation, useCommentParam]
+      [id, nextComment, nextTranslation, useCommentParam, nextHashtags, useHashtagsParam]
     );
 
     const result = await enqueueDraft(id);
@@ -1509,10 +1550,12 @@ app.post("/drafts/:id/approve-and-queue", async (req, res) => {
 
 app.post("/drafts/:id/queue", async (req, res) => {
   const id = Number(req.params.id);
-  const { comment_tr, translation_tr, use_comment } = req.body || {};
+  const { comment_tr, translation_tr, use_comment, hashtags_tr, use_hashtags } = req.body || {};
   const nextComment = normalizeOptionalText(comment_tr);
   const nextTranslation = normalizeOptionalText(translation_tr);
   const useCommentParam = use_comment === undefined ? null : !!use_comment;
+  const nextHashtags = normalizeOptionalText(hashtags_tr);
+  const useHashtagsParam = use_hashtags === undefined ? null : !!use_hashtags;
 
   try {
     await pool.query(
@@ -1521,10 +1564,12 @@ app.post("/drafts/:id/queue", async (req, res) => {
       SET status='approved',
           comment_tr = COALESCE($2, comment_tr),
           translation_tr = COALESCE($3, translation_tr),
-          use_comment = COALESCE($4, use_comment)
+          use_comment = COALESCE($4, use_comment),
+          hashtags_tr = COALESCE($5, hashtags_tr),
+          use_hashtags = COALESCE($6, use_hashtags)
       WHERE id=$1
       `,
-      [id, nextComment, nextTranslation, useCommentParam]
+      [id, nextComment, nextTranslation, useCommentParam, nextHashtags, useHashtagsParam]
     );
 
     const result = await enqueueDraft(id);
@@ -1543,10 +1588,12 @@ app.post("/drafts/:id/queue", async (req, res) => {
 
 app.post("/drafts/:id/post-now", async (req, res) => {
   const id = Number(req.params.id);
-  const { comment_tr, translation_tr, use_comment } = req.body || {};
+  const { comment_tr, translation_tr, use_comment, hashtags_tr, use_hashtags } = req.body || {};
   const nextComment = normalizeOptionalText(comment_tr);
   const nextTranslation = normalizeOptionalText(translation_tr);
   const useCommentParam = use_comment === undefined ? null : !!use_comment;
+  const nextHashtags = normalizeOptionalText(hashtags_tr);
+  const useHashtagsParam = use_hashtags === undefined ? null : !!use_hashtags;
 
   try {
     await pool.query(
@@ -1554,10 +1601,12 @@ app.post("/drafts/:id/post-now", async (req, res) => {
       UPDATE drafts
       SET comment_tr = COALESCE($2, comment_tr),
           translation_tr = COALESCE($3, translation_tr),
-          use_comment = COALESCE($4, use_comment)
+          use_comment = COALESCE($4, use_comment),
+          hashtags_tr = COALESCE($5, hashtags_tr),
+          use_hashtags = COALESCE($6, use_hashtags)
       WHERE id=$1
       `,
-      [id, nextComment, nextTranslation, useCommentParam]
+      [id, nextComment, nextTranslation, useCommentParam, nextHashtags, useHashtagsParam]
     );
 
     const result = await directPostDraftNow(id);

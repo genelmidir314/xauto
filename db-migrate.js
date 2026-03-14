@@ -40,6 +40,12 @@ async function migrate() {
   `);
 
   await pool.query(`
+    ALTER TABLE drafts
+    ADD COLUMN IF NOT EXISTS hashtags_tr TEXT,
+    ADD COLUMN IF NOT EXISTS use_hashtags BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await pool.query(`
     ALTER TABLE queue
     ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW(),

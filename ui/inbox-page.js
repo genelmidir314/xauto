@@ -415,7 +415,7 @@ function renderInboxCard(row, helpers) {
   const { esc, fmtStatusPill, fmtQueueStatusTR, composePreview, formatDateTR, mediaHtml } = helpers;
   const id = row.id;
   const sourceLinkFallback = isSourceLinkFallbackFormat(row.format_key);
-  const preview = composePreview(row.comment_tr, row.translation_tr, row.format_key, row.x_url);
+  const preview = composePreview(row.comment_tr, row.translation_tr, row.format_key, row.x_url, row.hashtags_tr, row.use_hashtags);
   const charCount = preview.length;
   const tweetId = row.tweet_id || "";
   const sh = (row.source_handle || "").replace(/^@/, "");
@@ -436,7 +436,7 @@ function renderInboxCard(row, helpers) {
       String(row.queue_id || "")
     )}" data-format-key="${esc(
       row.format_key || ""
-    )}" data-x-url="${esc(xUrl)}" data-use-comment="${row.use_comment !== false ? "true" : "false"}">
+    )}" data-x-url="${esc(xUrl)}" data-use-comment="${row.use_comment !== false ? "true" : "false"}" data-use-hashtags="${row.use_hashtags === true ? "true" : "false"}">
       <div class="draftHeader">
         <div class="titleBlock">
           <div class="draftTitle">
@@ -494,6 +494,18 @@ function renderInboxCard(row, helpers) {
             <button type="button" class="btn btnSave" data-action="regenerate-comment">Yorumu yenile</button>
           </div>
           <textarea class="box mono" data-field="comment">${esc(row.comment_tr || "")}</textarea>
+        </section>
+
+        <section class="fieldStack">
+          <div class="label">Hashtag</div>
+          <div class="commentControls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" data-field="use-hashtags" ${row.use_hashtags === true ? "checked" : ""} />
+              <span>Hashtagi kullan</span>
+            </label>
+            <button type="button" class="btn btnSave" data-action="regenerate-hashtags">Hashtagi yenile</button>
+          </div>
+          <textarea class="box mono" data-field="hashtags" placeholder="#Teknoloji #AI #Gundem" style="min-height:48px;">${esc(row.hashtags_tr || "")}</textarea>
         </section>
       </div>
 

@@ -234,10 +234,13 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
 
       function payloadFor(card) {
         const useCommentEl = qs('[data-field="use-comment"]', card);
+        const useHashtagsEl = qs('[data-field="use-hashtags"]', card);
         return {
           comment_tr: qs('[data-field="comment"]', card)?.value ?? "",
           translation_tr: qs('[data-field="translation"]', card)?.value ?? "",
           use_comment: useCommentEl ? useCommentEl.checked : true,
+          hashtags_tr: qs('[data-field="hashtags"]', card)?.value ?? "",
+          use_hashtags: useHashtagsEl ? useHashtagsEl.checked : false,
         };
       }
 
@@ -246,13 +249,20 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
         const useComment = payload.use_comment !== false;
         const comment = useComment ? payload.comment_tr.trim() : "";
         const translation = payload.translation_tr.trim();
+        const hashtags = payload.hashtags_tr.trim();
+        const useHashtags = payload.use_hashtags === true;
         const formatKey = card.dataset.formatKey || "";
         const xUrl = (card.dataset.xUrl || "").trim();
+        let base = "";
         if (formatKey === "comment_translation_source_link") {
-          return [comment, translation, xUrl].filter(Boolean).join("\\n\\n");
+          base = [comment, translation, xUrl].filter(Boolean).join("\\n\\n");
+        } else if (comment && translation) {
+          base = comment + "\\n\\n" + translation;
+        } else {
+          base = comment || translation || "";
         }
-        if (comment && translation) return comment + "\\n\\n" + translation;
-        return comment || translation || "";
+        if (useHashtags && hashtags) base = base ? base + "\\n\\n" + hashtags : hashtags;
+        return base;
       }
 
       function setMessage(card, text, kind) {
@@ -436,6 +446,14 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
             const useCommentCheck = qs('[data-field="use-comment"]', card);
             if (useCommentCheck) useCommentCheck.checked = true;
             setMessage(card, "Yorum yenilendi.", "success");
+          } else if (action === "regenerate-hashtags") {
+            result = await sendJson("/drafts/" + id + "/regenerate-hashtags", {});
+            if (!result.ok) throw new Error(result.error || "Hashtag uretilemedi");
+            const hashtagsEl = qs('[data-field="hashtags"]', card);
+            if (hashtagsEl) {
+              hashtagsEl.value = result.hashtags_tr || "";
+            }
+            setMessage(card, "Hashtag yenilendi.", "success");
           }
         } catch (error) {
           setMessage(card, error.message || "İslem basarisiz.", "error");
@@ -461,6 +479,10 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
         if (!card) return;
         if (event.target.matches('[data-field="use-comment"]')) {
           card.dataset.useComment = event.target.checked ? "true" : "false";
+          updatePreview(card);
+        }
+        if (event.target.matches('[data-field="use-hashtags"]')) {
+          card.dataset.useHashtags = event.target.checked ? "true" : "false";
           updatePreview(card);
         }
       });

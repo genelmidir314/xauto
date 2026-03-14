@@ -6,22 +6,27 @@ function isSourceLinkFallbackFormat(formatKey) {
   return formatKey === COMMENT_TRANSLATION_SOURCE_LINK_FORMAT_KEY;
 }
 
-function composeDraftText(comment, translation, formatKey, xUrl) {
+function composeDraftText(comment, translation, formatKey, xUrl, hashtags, useHashtags) {
   const c = String(comment || "").trim();
   const t = String(translation || "").trim();
   const link = String(xUrl || "").trim();
+  const tags = String(hashtags || "").trim();
 
+  let base;
   if (isSourceLinkFallbackFormat(formatKey)) {
-    return [c, t, link].filter(Boolean).join("\n\n");
+    base = [c, t, link].filter(Boolean).join("\n\n");
+  } else if (formatKey === COMMENT_TRANSLATION_FORMAT_KEY) {
+    if (c && t) base = `${c}\n\n${t}`;
+    else if (t) base = t;
+    else base = c || "";
+  } else {
+    base = [c, t].filter(Boolean).join("\n\n");
   }
 
-  if (formatKey === COMMENT_TRANSLATION_FORMAT_KEY) {
-    if (c && t) return `${c}\n\n${t}`;
-    if (t) return t;
-    return c || "";
+  if (useHashtags === true && tags) {
+    return base ? `${base}\n\n${tags}` : tags;
   }
-
-  return [c, t].filter(Boolean).join("\n\n");
+  return base;
 }
 
 module.exports = {

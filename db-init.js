@@ -57,6 +57,8 @@ async function init() {
       comment_tr TEXT,
       translation_tr TEXT,
       use_comment BOOLEAN NOT NULL DEFAULT true,
+      hashtags_tr TEXT,
+      use_hashtags BOOLEAN NOT NULL DEFAULT false,
       format_key TEXT,
       viral_score INTEGER,
       viral_reason TEXT,
@@ -68,6 +70,9 @@ async function init() {
 
   await pool.query(`
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT true;
+  `);
+  await pool.query(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS hashtags_tr TEXT, ADD COLUMN IF NOT EXISTS use_hashtags BOOLEAN NOT NULL DEFAULT false;
   `);
 
   await pool.query(`
