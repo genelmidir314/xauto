@@ -11,6 +11,7 @@ const {
   cleanupTweetText,
   openaiChat,
   generateComment,
+  generateHashtags,
   setOpenAIKeyValid,
 } = require("./lib/openai-comment");
 
@@ -394,16 +395,18 @@ async function run() {
     );
     commentTr = shortened.commentTr;
     const finalTranslationTr = shortened.translationTr;
+    const hashtagsTr = await generateHashtags(commentTr, finalTranslationTr, originalText);
     await pool.query(
       `
       INSERT INTO drafts
-      (tweet_id, comment_tr, translation_tr, format_key, status, created_at, viral_score, viral_reason)
-      VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7)
+      (tweet_id, comment_tr, translation_tr, hashtags_tr, format_key, status, created_at, viral_score, viral_reason)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
       `,
       [
         tweetId,
         commentTr,
         finalTranslationTr,
+        hashtagsTr || null,
         draftFormatKey,
         "pending",
         viral.score,
