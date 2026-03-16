@@ -19,6 +19,7 @@ const {
   uploadMediaFromStoredMedia,
   uploadVideoFromLocalFile,
 } = require("./x-media-upload");
+const { downloadTikTokVideo, TIKTOK_DOWNLOAD_DIR } = require("./tiktok-download");
 const {
   composeDraftText,
   isSourceLinkFallbackFormat,
@@ -465,11 +466,29 @@ async function tickOnce() {
     let uploadedMedia = null;
     if (isSourceLinkFallbackFormat(draft.format_key)) {
       uploadedMedia = null;
-    } else if (isTikTokVideoFormat(draft.format_key) && draft.tiktok_local_path) {
+    } else if (isTikTokVideoFormat(draft.format_key)) {
       const fs = require("fs");
-      const resolvedPath = require("path").resolve(draft.tiktok_local_path);
-      if (fs.existsSync(resolvedPath)) {
-        const result = await uploadVideoFromLocalFile(resolvedPath, X_AUTH);
+      const pathModule = require("path");
+      let localPath = null;
+      if (draft.tiktok_local_path) {
+        const resolvedPath = pathModule.isAbsolute(draft.tiktok_local_path)
+          ? draft.tiktok_local_path
+          : pathModule.join(process.cwd(), draft.tiktok_local_path);
+        if (fs.existsSync(resolvedPath)) {
+          localPath = resolvedPath;
+        }
+      }
+      if (!localPath && (draft.tiktok_video_url || draft.tiktok_source_url)) {
+        const videoUrl = draft.tiktok_video_url || draft.tiktok_source_url;
+        try {
+          const result = await downloadTikTokVideo(videoUrl, TIKTOK_DOWNLOAD_DIR);
+          localPath = result?.localPath || result;
+        } catch (e) {
+          console.error(`TikTok re-download failed: ${e?.message || e}`);
+        }
+      }
+      if (localPath) {
+        const result = await uploadVideoFromLocalFile(localPath, X_AUTH);
         uploadedMedia = result
           ? { mediaId: result.mediaId, type: result.type }
           : null;

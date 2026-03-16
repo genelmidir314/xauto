@@ -727,10 +727,6 @@ async function directPostDraftNow(draftId) {
       throw new Error(mediaInspection.error || "Draft medyasi paylasim icin uygun degil.");
     }
   }
-  if (tiktokFormat && !draft.tiktok_local_path) {
-    throw new Error("TikTok draft icin video dosyasi bulunamadi.");
-  }
-
   const text = buildFinalTextFromDraft(draft);
   if (!text) throw new Error("Paylaşılacak metin boş");
   if (text.length > 280) throw new Error(`Metin çok uzun: ${text.length}`);
@@ -744,12 +740,33 @@ async function directPostDraftNow(draftId) {
   }
 
   let uploadedMedia = null;
-  if (tiktokFormat && draft.tiktok_local_path) {
+  if (tiktokFormat) {
     const pathModule = require("path");
-    const resolvedPath = pathModule.isAbsolute(draft.tiktok_local_path)
-      ? draft.tiktok_local_path
-      : pathModule.join(process.cwd(), draft.tiktok_local_path);
-    uploadedMedia = await uploadVideoFromLocalFile(resolvedPath, X_AUTH);
+    const fs = require("fs");
+    const { downloadTikTokVideo, TIKTOK_DOWNLOAD_DIR } = require("./tiktok-download");
+    let localPath = null;
+    if (draft.tiktok_local_path) {
+      const resolvedPath = pathModule.isAbsolute(draft.tiktok_local_path)
+        ? draft.tiktok_local_path
+        : pathModule.join(process.cwd(), draft.tiktok_local_path);
+      if (fs.existsSync(resolvedPath)) {
+        localPath = resolvedPath;
+      }
+    }
+    if (!localPath && (draft.tiktok_video_url || draft.tiktok_source_url)) {
+      const videoUrl = draft.tiktok_video_url || draft.tiktok_source_url;
+      try {
+        const result = await downloadTikTokVideo(videoUrl, TIKTOK_DOWNLOAD_DIR);
+        localPath = result?.localPath || result;
+      } catch (e) {
+        throw new Error(`TikTok video indirilemedi: ${e?.message || e}`);
+      }
+    }
+    if (localPath) {
+      uploadedMedia = await uploadVideoFromLocalFile(localPath, X_AUTH);
+    } else {
+      throw new Error("TikTok draft icin video dosyasi veya URL bulunamadi.");
+    }
   } else if (!sourceLinkFallback) {
     uploadedMedia = await uploadDraftMediaToX(draft.media);
   }
