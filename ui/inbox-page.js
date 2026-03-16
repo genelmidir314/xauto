@@ -373,20 +373,23 @@ function renderInboxActions(row, previewLength, helpers) {
       '<button type="button" class="btn btnApprove" data-action="approve">Onayla</button>',
       '<button type="button" class="btn btnReject" data-action="reject">Reject</button>'
     );
-  } else if (row.status === "approved" && row.queue_id) {
-    if (row.queue_status === "failed") {
-      buttons.splice(
-        1,
-        0,
-        `<button type="button" class="btn btnSave" data-action="retryQueue" data-queue-id="${esc ? esc(String(row.queue_id)) : row.queue_id}">Yeniden siraya al</button>`
-      );
-    } else if (row.queue_status !== "processing") {
-      buttons.splice(
-        1,
-        0,
-        `<button type="button" class="btn btnCancel" data-action="cancelQueue" data-queue-id="${esc ? esc(String(row.queue_id)) : row.queue_id}">Iptal</button>`
-      );
+  } else if (row.status === "approved") {
+    if (row.queue_id) {
+      if (row.queue_status === "failed") {
+        buttons.splice(
+          1,
+          0,
+          `<button type="button" class="btn btnSave" data-action="retryQueue" data-queue-id="${esc ? esc(String(row.queue_id)) : row.queue_id}">Yeniden siraya al</button>`
+        );
+      } else if (row.queue_status !== "processing") {
+        buttons.splice(
+          1,
+          0,
+          `<button type="button" class="btn btnCancel" data-action="cancelQueue" data-queue-id="${esc ? esc(String(row.queue_id)) : row.queue_id}">Iptal</button>`
+        );
+      }
     }
+    buttons.push('<button type="button" class="btn btnReject" data-action="reject">Sil</button>');
   }
 
   return `

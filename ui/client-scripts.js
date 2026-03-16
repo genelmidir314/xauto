@@ -369,7 +369,7 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
         const id = card.dataset.id;
         const action = button.dataset.action;
 
-        if (action === "reject" && !confirm("Bu draft rejected yapilsin mi?")) return;
+        if (action === "reject" && !confirm("Bu draft silinsin mi? (Rejected olarak isaretlenir, sira iptal edilir)")) return;
         if (action === "postNow" && !confirm("Bu draft hemen paylasilsin mi?")) return;
         if (action === "cancelQueue" && !confirm("Bu sira kaydi iptal edilsin mi? Sonrakiler yeniden schedule edilecek.")) return;
 
@@ -400,7 +400,7 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
             result = await sendJson("/drafts/" + id + "/status", { status: "rejected" });
             if (!result.ok) throw new Error(result.error || "reject failed");
             syncCardMeta(card, "rejected", { inQueue: false });
-            setMessage(card, "Rejected.", "success");
+            setMessage(card, "Silindi.", "success");
             hideCardIfNeeded(card, "rejected");
           } else if (action === "postNow") {
             result = await sendJson("/drafts/" + id + "/post-now", payloadFor(card));
