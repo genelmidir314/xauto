@@ -21,7 +21,7 @@ function composeDraftText(comment, translation, formatKey, xUrl, hashtags, useHa
   if (isSourceLinkFallbackFormat(formatKey)) {
     base = [c, t, link].filter(Boolean).join("\n\n");
   } else if (isTikTokVideoFormat(formatKey)) {
-    base = [c, t, link].filter(Boolean).join("\n\n");
+    base = [c, t].filter(Boolean).join("\n\n");
   } else if (formatKey === COMMENT_TRANSLATION_FORMAT_KEY) {
     if (c && t) base = `${c}\n\n${t}`;
     else if (t) base = t;
