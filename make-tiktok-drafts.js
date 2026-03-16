@@ -11,7 +11,7 @@ const { Pool } = require("pg");
 const path = require("path");
 const { ensureTikTokSchema } = require("./ensure-tiktok-schema");
 const { TIKTOK_VIDEO_FORMAT_KEY } = require("./draft-format");
-const { generateComment } = require("./lib/openai-comment");
+const { generateComment, translateToTurkish } = require("./lib/openai-comment");
 
 const MAX_TWEET_LENGTH = 280;
 
@@ -53,11 +53,12 @@ async function run() {
   let created = 0;
   for (const row of candidates.rows) {
     const caption = cleanupText(row.caption) || (row.author_handle ? `@${row.author_handle} TikTok videosu` : "TikTok videosu");
+    const translationTr = await translateToTurkish(caption);
     const authorHandle = row.author_handle || "tiktok";
     const commentTr = await generateComment(
       authorHandle,
       caption,
-      caption,
+      translationTr || caption,
       true
     );
     const text = commentTr.trim();
@@ -77,10 +78,10 @@ async function run() {
       `
       INSERT INTO drafts
       (tweet_id, comment_tr, translation_tr, format_key, status, viral_score, viral_reason, tiktok_item_id)
-      VALUES ($1, $2, '', $3, 'pending', $4, 'tiktok', $5)
+      VALUES ($1, $2, $3, $4, 'pending', $5, 'tiktok', $6)
       ON CONFLICT (tweet_id) DO NOTHING
       `,
-      [tweetId, finalText, TIKTOK_VIDEO_FORMAT_KEY, row.viral_score || 50, row.id]
+      [tweetId, finalText, translationTr, TIKTOK_VIDEO_FORMAT_KEY, row.viral_score || 50, row.id]
     );
 
     if ((await pool.query(`SELECT 1 FROM drafts WHERE tweet_id=$1`, [tweetId]))
