@@ -1817,7 +1817,7 @@ app.get(["/", "/inbox"], async (req, res) => {
     const dashboard = await getDashboardStats(scheduleSettings);
 
     const sourceCondition = sourceFilter
-      ? " AND t.source_handle ILIKE $5"
+      ? " AND (t.source_handle ILIKE $5 OR ti.author_handle ILIKE $5)"
       : "";
     const sourcePattern = sourceFilter ? `%${sourceFilter}%` : "";
     const categoryCondition = categoryFilter
@@ -1842,21 +1842,30 @@ app.get(["/", "/inbox"], async (req, res) => {
       SELECT
         d.*,
         CASE WHEN d.status='queued' THEN 'approved' ELSE d.status END AS normalized_status,
-        t.text AS original_text,
-        t.source_handle,
-        t.x_url,
+        COALESCE(t.text, ti.caption,
+          CASE WHEN ti.id IS NOT NULL AND ti.author_handle IS NOT NULL THEN '@' || ti.author_handle || ' TikTok videosu'
+               WHEN ti.id IS NOT NULL THEN 'TikTok video'
+               WHEN d.format_key = 'tiktok_video' THEN 'TikTok video'
+               ELSE NULL END) AS original_text,
+        COALESCE(t.source_handle, ti.author_handle) AS source_handle,
+        COALESCE(t.x_url, ti.video_url, ti.source_url) AS x_url,
         t.media,
-        t.has_media,
-        t.media_uploadable,
+        COALESCE(t.has_media, (ti.id IS NOT NULL)) AS has_media,
+        COALESCE(t.media_uploadable, (ti.local_path IS NOT NULL)) AS media_uploadable,
         t.media_validation_error,
         s.category AS source_category,
         q.id AS queue_id,
         q.scheduled_at,
-        q.status AS queue_status
+        q.status AS queue_status,
+        ti.id AS tiktok_item_id,
+        ti.local_path AS tiktok_local_path
       FROM drafts d
       LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
-      LEFT JOIN sources s ON t.source_handle IS NOT NULL AND s.handle IS NOT NULL
-        AND LOWER(TRIM(BOTH '@' FROM t.source_handle)) = LOWER(TRIM(s.handle))
+      LEFT JOIN tiktok_items ti ON ti.id = d.tiktok_item_id
+      LEFT JOIN sources s ON (
+        (t.source_handle IS NOT NULL AND s.handle IS NOT NULL AND LOWER(TRIM(BOTH '@' FROM t.source_handle)) = LOWER(TRIM(s.handle)))
+        OR (ti.author_handle IS NOT NULL AND s.handle IS NOT NULL AND LOWER(TRIM(BOTH '@' FROM ti.author_handle)) = LOWER(TRIM(s.handle)))
+      )
       LEFT JOIN LATERAL (
         SELECT q1.id, q1.scheduled_at, q1.status
         FROM queue q1
@@ -1874,11 +1883,13 @@ app.get(["/", "/inbox"], async (req, res) => {
           OR $3 = 'all'
           OR (
             $3 = 'video'
-            AND t.media IS NOT NULL
-            AND EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(t.media) AS m(elem)
-              WHERE m.elem->>'type' IN ('video', 'animated_gif')
+            AND (
+              (t.media IS NOT NULL AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(t.media) AS m(elem)
+                WHERE m.elem->>'type' IN ('video', 'animated_gif')
+              ))
+              OR (d.tiktok_item_id IS NOT NULL)
             )
           )
         )${sourceCondition}${categoryCondition}
