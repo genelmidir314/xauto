@@ -183,7 +183,13 @@ function composePreview(comment, translation, formatKey, xUrl, hashtags, useHash
 
 function formatDateTR(dateValue) {
   if (!dateValue) return "-";
-  const d = new Date(dateValue);
+  let d = new Date(dateValue);
+  // PostgreSQL timestamp without timezone: node-pg interprets as local. Force UTC if string has no TZ.
+  const s = typeof dateValue === "string" ? dateValue.trim() : "";
+  if (s && !/Z|[+-]\d{2}:?\d{2}$/.test(s)) {
+    const withZ = s.includes("T") ? s + "Z" : s.replace(" ", "T") + "Z";
+    d = new Date(withZ);
+  }
   return d.toLocaleString("tr-TR", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
@@ -191,6 +197,7 @@ function formatDateTR(dateValue) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }
 
