@@ -1407,6 +1407,7 @@ app.get("/drafts", async (req, res) => {
         COALESCE(t.text, ti.caption,
           CASE WHEN ti.id IS NOT NULL AND ti.author_handle IS NOT NULL THEN '@' || ti.author_handle || ' TikTok videosu'
                WHEN ti.id IS NOT NULL THEN 'TikTok video'
+               WHEN d.format_key = 'tiktok_video' THEN 'TikTok video'
                ELSE NULL END) AS original_text,
         COALESCE(t.source_handle, ti.author_handle) AS source_handle,
         COALESCE(t.x_url, ti.video_url, ti.source_url) AS x_url,
