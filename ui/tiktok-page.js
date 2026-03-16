@@ -65,7 +65,7 @@ function renderTikTokSourcesCard(sources, helpers) {
   `;
 }
 
-function renderTikTokActionsCard(helpers) {
+function renderTikTokActionsCard(helpers, tiktokItemsCount = 0, sourcesCount = 0) {
   const { esc } = helpers;
   return `
     <div class="card settingsCard">
@@ -74,6 +74,9 @@ function renderTikTokActionsCard(helpers) {
           <div style="font-weight:700;">TikTok Akisi</div>
           <div class="settingsHelp">1) Kaynak ekle 2) Collector calistir (videolari indirir) 3) Draft uret (OpenAI yorum ekler)</div>
         </div>
+        <div class="settingsMeta muted">
+          <span>Toplanan video: <b>${esc(String(tiktokItemsCount))}</b></span>
+        </div>
       </div>
 
       <div class="toolbar">
@@ -81,12 +84,17 @@ function renderTikTokActionsCard(helpers) {
         <button class="btn btnSave" type="button" data-action="run-make-tiktok-drafts">Draft Uret</button>
         <a class="btn" href="/inbox?status=pending&pendingMedia=video">Inbox (videolu)</a>
       </div>
+      ${tiktokItemsCount === 0 && sourcesCount > 0 ? `
+      <div class="message show info" style="margin-top:10px;">
+        Video toplanmiyorsa: yt-dlp gerekli (apt install yt-dlp / brew install yt-dlp). Render/cloud'da TikTok IP engelleyebilir. Sunucu loglarini kontrol edin.
+      </div>
+      ` : ""}
       <div id="tiktokMessage" class="message" aria-live="polite"></div>
     </div>
   `;
 }
 
-function renderTikTokPage({ sources, helpers }) {
+function renderTikTokPage({ sources, tiktokItemsCount = 0, helpers }) {
   const { esc } = helpers;
 
   const body = `
@@ -107,7 +115,7 @@ function renderTikTokPage({ sources, helpers }) {
       esc
     )}
 
-    ${renderTikTokActionsCard(helpers)}
+    ${renderTikTokActionsCard(helpers, tiktokItemsCount, sources?.length ?? 0)}
     ${renderTikTokSourcesCard(sources, helpers)}
   `;
 

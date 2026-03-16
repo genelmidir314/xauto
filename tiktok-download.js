@@ -12,6 +12,7 @@
 require("dotenv").config();
 const path = require("path");
 const fs = require("fs");
+const { execSync } = require("child_process");
 
 const YTDlpWrap = require("yt-dlp-wrap").default;
 
@@ -32,7 +33,24 @@ function getUrlFromArgs() {
   return pos >= 0 ? process.argv[pos] : null;
 }
 
+function isYtDlpInPath() {
+  try {
+    execSync("yt-dlp --version", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureYtDlp() {
+  const envPath = process.env.YT_DLP_PATH;
+  if (envPath && fs.existsSync(envPath) && fs.statSync(envPath).isFile()) {
+    return envPath;
+  }
+  if (isYtDlpInPath()) {
+    return "yt-dlp";
+  }
+
   const binDir = path.join(process.cwd(), ".yt-dlp-bin");
   const binPath = path.join(
     binDir,
@@ -40,12 +58,25 @@ async function ensureYtDlp() {
   );
 
   if (fs.existsSync(binPath)) {
-    return binPath;
+    try {
+      const stat = fs.statSync(binPath);
+      if (stat.isFile()) return binPath;
+    } catch (_) {}
   }
 
   console.error("yt-dlp binary bulunamadi, indiriliyor...");
   fs.mkdirSync(binDir, { recursive: true });
-  await YTDlpWrap.downloadFromGithub(binDir);
+  try {
+    await YTDlpWrap.downloadFromGithub(binPath);
+  } catch (e) {
+    throw new Error(
+      `yt-dlp indirilemedi: ${e.message}. Sistemde yt-dlp yukleyin (apt install yt-dlp / brew install yt-dlp) veya YT_DLP_PATH env ile yol verin.`
+    );
+  }
+  if (!fs.existsSync(binPath) || !fs.statSync(binPath).isFile()) {
+    throw new Error("yt-dlp indirildi ama dosya bulunamadi.");
+  }
+  await new Promise((r) => setTimeout(r, 1500));
   return binPath;
 }
 

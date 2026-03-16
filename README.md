@@ -138,6 +138,15 @@ npm run tiktok:test       # TikTok URL ile indir + X upload testi
 | `WORKER_MIN_POST_INTERVAL_MINUTES` | Min post aralığı (dk) |
 | `WORKER_DRY_RUN` | `true` ise worker post atmaz |
 | `XAUTO_ADMIN_TOKEN` | Uzaktan POST için token (opsiyonel) |
+| `YT_DLP_PATH` | yt-dlp binary yolu (TikTok icin) |
+| `TIKTOK_SAME_USER_WAIT_SECONDS` | Ayni kullanici icin min bekleme (varsayilan 120) |
+| `TIKTOK_YT_DLP_DELAY_MS` | Her yt-dlp cagrisi arasi bekleme (varsayilan 2000) |
+
+## TikTok
+
+TikTok UI (`/tiktok-ui`): Kullanici adi veya video URL ekleyin. Collector yt-dlp ile videolari indirir.
+
+**Gereksinim:** yt-dlp (sistemde `apt install yt-dlp` veya `brew install yt-dlp`). Render/cloud'da TikTok IP engelleyebilir; yerel calistirma onerilir.
 
 ## Güvenlik
 

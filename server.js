@@ -1303,14 +1303,18 @@ app.post("/run-make-tiktok-drafts", async (req, res) => {
 app.get("/tiktok-ui", async (req, res) => {
   try {
     await ensureTikTokSchema(pool);
-    const sources = await pool
-      .query(
+    const [sourcesResult, itemsResult] = await Promise.all([
+      pool.query(
         `SELECT id, url, active, last_checked_at, created_at FROM tiktok_sources ORDER BY id DESC LIMIT 100`
-      )
-      .then((r) => r.rows);
+      ),
+      pool.query(`SELECT COUNT(*)::int AS c FROM tiktok_items`),
+    ]);
+    const sources = sourcesResult.rows;
+    const tiktokItemsCount = itemsResult.rows[0]?.c ?? 0;
     res.send(
       renderTikTokPage({
         sources,
+        tiktokItemsCount,
         helpers: uiHelpers,
       })
     );

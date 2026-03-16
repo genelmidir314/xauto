@@ -36,6 +36,13 @@ const SAME_USER_MIN_WAIT_SECONDS = Number(
 /** Kullanici profili scrape ederken kac video alinacak. */
 const USER_VIDEO_LIMIT = Number(process.env.TIKTOK_USER_VIDEO_LIMIT || 10);
 
+/** Her yt-dlp cagrisi arasinda bekleme (ms). EBUSY ve rate limit icin. */
+const YT_DLP_DELAY_MS = Number(process.env.TIKTOK_YT_DLP_DELAY_MS || 2000);
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function isUserProfileUrl(url) {
   return url && url.includes("tiktok.com") && !url.includes("/video/");
 }
@@ -122,8 +129,10 @@ async function run() {
     const url = s.url;
     try {
       if (isUserProfileUrl(url)) {
+        await sleep(YT_DLP_DELAY_MS);
         const videoUrls = await getTikTokUserVideoUrls(url, USER_VIDEO_LIMIT);
         for (const videoUrl of videoUrls) {
+          await sleep(YT_DLP_DELAY_MS);
           try {
             const { videoId, viralScore } = await processVideoUrl(videoUrl, url);
             console.log(`✅ ${url} -> video_id=${videoId} score=${viralScore}`);
@@ -132,6 +141,7 @@ async function run() {
           }
         }
       } else {
+        await sleep(YT_DLP_DELAY_MS);
         const { videoId, viralScore } = await processVideoUrl(url, url);
         console.log(`✅ ${url.slice(0, 50)}...: video_id=${videoId} score=${viralScore}`);
       }
@@ -147,6 +157,9 @@ async function run() {
       );
     } catch (e) {
       console.error(`❌ ${url}: ${e.message}`);
+      if (e.message && e.message.includes("timed out")) {
+        console.error("   (TikTok ag erisim sorunu - VPN/firewall veya bolge engeli olabilir)");
+      }
       await pool.query(
         `
         UPDATE tiktok_sources
@@ -157,6 +170,7 @@ async function run() {
         [s.id, String(SAME_USER_MIN_WAIT_SECONDS)]
       );
     }
+    await sleep(YT_DLP_DELAY_MS);
   }
 
   await pool.end();
