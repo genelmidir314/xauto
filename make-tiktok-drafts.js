@@ -43,7 +43,6 @@ async function run() {
     LEFT JOIN drafts d ON d.tiktok_item_id = ti.id
     WHERE d.id IS NULL
       AND ti.local_path IS NOT NULL
-      AND ti.caption IS NOT NULL
     ORDER BY ti.viral_score DESC NULLS LAST, ti.id DESC
     LIMIT 50
     `
@@ -53,7 +52,7 @@ async function run() {
 
   let created = 0;
   for (const row of candidates.rows) {
-    const caption = cleanupText(row.caption);
+    const caption = cleanupText(row.caption) || (row.author_handle ? `@${row.author_handle} TikTok videosu` : "TikTok videosu");
     const authorHandle = row.author_handle || "tiktok";
     const commentTr = await generateComment(
       authorHandle,

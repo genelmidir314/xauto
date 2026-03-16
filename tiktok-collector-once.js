@@ -87,7 +87,12 @@ async function run() {
     const meta = result.metadata || {};
     const videoId = meta.id || path.basename(localPath, path.extname(localPath));
     const author = meta.uploader || meta.uploader_id || meta.creator || null;
-    const caption = meta.title || meta.description || null;
+    const caption =
+      meta.description ||
+      meta.title ||
+      meta.caption ||
+      meta.fulltitle ||
+      (author ? `@${author} videosu` : null);
     const viewCount = meta.view_count ?? meta.play_count ?? 0;
     const likeCount = meta.like_count ?? 0;
     const commentCount = meta.comment_count ?? 0;
