@@ -430,6 +430,10 @@ function renderInboxCard(row, helpers) {
   const viralScore = row.viral_score ?? "-";
   const viralReason = row.viral_reason || "";
   const scheduledText = row.scheduled_at ? formatDateTR(row.scheduled_at) : null;
+  const tiktokVideoId =
+    row.tiktok_item_id && xUrl
+      ? row.tweet_id?.replace(/^tiktok_/, "") || row.x_url?.match(/\/video\/(\d+)/)?.[1]
+      : null;
   const mediaWarning =
     row.has_media && row.media_uploadable === false && !sourceLinkFallback
       ? row.media_validation_error || "Bu medya yeniden paylasim icin uygun degil."
@@ -475,7 +479,9 @@ function renderInboxCard(row, helpers) {
           <div class="box">${esc(row.original_text || "(bulunamadi)")}</div>
           ${mediaWarning ? `<div class="message show error">${esc(mediaWarning)}</div>` : ""}
           ${row.tiktok_item_id && xUrl
-            ? `<div class="mediaGrid"><div class="mediaItem"><a class="mediaLink" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer"><span class="mediaBadge">TikTok VIDEO</span></a></div></div>`
+            ? tiktokVideoId
+              ? `<div class="mediaGrid tiktokEmbedWrap"><blockquote class="tiktok-embed" cite="${esc(xUrl)}" data-video-id="${esc(tiktokVideoId)}" data-embed-from="oembed" style="max-width:605px;min-width:325px;"><section><a target="_blank" href="${esc(xUrl)}">TikTok</a></section></blockquote></div>`
+              : `<div class="mediaGrid"><div class="mediaItem"><a class="mediaLink" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer"><span class="mediaBadge">TikTok VIDEO</span></a></div></div>`
             : mediaHtml(row.media, xUrl)}
         </section>
 
@@ -630,10 +636,14 @@ function renderInboxPage({
     </div>
   `;
 
+  const hasTiktokDrafts = rows.some((r) => r.tiktok_item_id);
+  const tiktokEmbedScript = hasTiktokDrafts
+    ? '<script async src="https://www.tiktok.com/embed.js"></script>'
+    : "";
   return renderPageShell(
     "XAuto Inbox",
     body,
-    renderInboxClientScript(status, queueView),
+    renderInboxClientScript(status, queueView) + tiktokEmbedScript,
     { writeTokenRequired: !!helpers.writeTokenRequired }
   );
 }
