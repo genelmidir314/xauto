@@ -24,8 +24,9 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const CHECK_INTERVAL_MINUTES = Number(
-  process.env.TIKTOK_CHECK_INTERVAL_MINUTES || 60
+/** Ayni kullanici icin minimum bekleme suresi (saniye). Rate limit icin. */
+const SAME_USER_MIN_WAIT_SECONDS = Number(
+  process.env.TIKTOK_SAME_USER_WAIT_SECONDS || 120
 );
 
 function scoreViral(viewCount, likeCount, commentCount) {
@@ -110,10 +111,10 @@ async function run() {
         `
         UPDATE tiktok_sources
         SET last_checked_at = NOW(),
-            next_check_at = NOW() + ($2 || ' minutes')::interval
+            next_check_at = NOW() + ($2 || ' seconds')::interval
         WHERE id = $1
         `,
-        [s.id, String(CHECK_INTERVAL_MINUTES)]
+        [s.id, String(SAME_USER_MIN_WAIT_SECONDS)]
       );
 
       console.log(
@@ -125,10 +126,10 @@ async function run() {
         `
         UPDATE tiktok_sources
         SET last_checked_at = NOW(),
-            next_check_at = NOW() + ($2 || ' minutes')::interval
+            next_check_at = NOW() + ($2 || ' seconds')::interval
         WHERE id = $1
         `,
-        [s.id, String(CHECK_INTERVAL_MINUTES)]
+        [s.id, String(SAME_USER_MIN_WAIT_SECONDS)]
       );
     }
   }
