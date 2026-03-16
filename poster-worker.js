@@ -15,8 +15,15 @@
 require("dotenv").config();
 const { Pool } = require("pg");
 const crypto = require("crypto");
-const { uploadMediaFromStoredMedia } = require("./x-media-upload");
-const { composeDraftText, isSourceLinkFallbackFormat } = require("./draft-format");
+const {
+  uploadMediaFromStoredMedia,
+  uploadVideoFromLocalFile,
+} = require("./x-media-upload");
+const {
+  composeDraftText,
+  isSourceLinkFallbackFormat,
+  isTikTokVideoFormat,
+} = require("./draft-format");
 const {
   ensureScheduleSettingsTable,
   getScheduleSettings,
@@ -348,15 +355,20 @@ async function takeOneDueJob() {
 async function loadDraft(draftId) {
   const r = await pool.query(
     `
-    SELECT d.id, d.tweet_id, d.comment_tr, d.translation_tr, d.use_comment, d.hashtags_tr, d.use_hashtags, d.format_key, d.status, t.media, t.x_url
+    SELECT d.id, d.tweet_id, d.comment_tr, d.translation_tr, d.use_comment, d.hashtags_tr, d.use_hashtags, d.format_key, d.status,
+           t.media, t.x_url,
+           ti.local_path AS tiktok_local_path, ti.video_url AS tiktok_video_url, ti.source_url AS tiktok_source_url
     FROM drafts d
     LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
+    LEFT JOIN tiktok_items ti ON ti.id = d.tiktok_item_id
     WHERE d.id=$1
     `,
     [draftId]
   );
   if (r.rowCount === 0) return null;
-  return r.rows[0];
+  const row = r.rows[0];
+  row.x_url = row.x_url || row.tiktok_video_url || row.tiktok_source_url;
+  return row;
 }
 
 function composeFinalText(draft) {
@@ -450,11 +462,23 @@ async function tickOnce() {
 
     console.log(`🟢 Posting draft_id=${draftId} queue_id=${queueId} attempts=${attempts}`);
 
-    const uploadedMedia = isSourceLinkFallbackFormat(draft.format_key)
-      ? null
-      : await uploadMediaFromStoredMedia(draft.media, X_AUTH, {
-          dryRun: DRY_RUN,
-        });
+    let uploadedMedia = null;
+    if (isSourceLinkFallbackFormat(draft.format_key)) {
+      uploadedMedia = null;
+    } else if (isTikTokVideoFormat(draft.format_key) && draft.tiktok_local_path) {
+      const fs = require("fs");
+      const resolvedPath = require("path").resolve(draft.tiktok_local_path);
+      if (fs.existsSync(resolvedPath)) {
+        const result = await uploadVideoFromLocalFile(resolvedPath, X_AUTH);
+        uploadedMedia = result
+          ? { mediaId: result.mediaId, type: result.type }
+          : null;
+      }
+    } else {
+      uploadedMedia = await uploadMediaFromStoredMedia(draft.media, X_AUTH, {
+        dryRun: DRY_RUN,
+      });
+    }
     const mediaIds = uploadedMedia ? [uploadedMedia.mediaId] : [];
     const resp = await xPostTweet(text, mediaIds);
     const xId = resp?.id || resp?.data?.id || null;

@@ -28,7 +28,9 @@ const { inspectStoredMedia, uploadMediaFromStoredMedia } = require("./x-media-up
 const {
   composeDraftText,
   isSourceLinkFallbackFormat,
+  isTikTokVideoFormat,
 } = require("./draft-format");
+const { uploadVideoFromLocalFile } = require("./x-media-upload");
 const {
   ensureScheduleSettingsTable,
   getScheduleSettings,
@@ -48,6 +50,7 @@ const {
 } = require("./collector-metrics");
 const { ensureTweetMediaValidationSchema } = require("./tweet-media-validation");
 const { ensureNewsSchema } = require("./ensure-news-schema");
+const { ensureTikTokSchema } = require("./ensure-tiktok-schema");
 const { generateComment, generateHashtags } = require("./lib/openai-comment");
 const { renderPageShell } = require("./ui/common");
 const { renderInboxPage } = require("./ui/inbox-page");
@@ -57,6 +60,7 @@ const { renderCollectorPage } = require("./ui/collector-page");
 const { renderFollowPage } = require("./ui/follow-page");
 const { renderReplyPage } = require("./ui/reply-page");
 const { renderNewsPage } = require("./ui/news-page");
+const { renderTikTokPage } = require("./ui/tiktok-page");
 
 const app = express();
 app.use(express.json({ limit: "4mb" }));
@@ -682,15 +686,20 @@ async function cancelQueueItem(queueId) {
 async function loadDraftFull(draftId) {
   const r = await pool.query(
     `
-    SELECT d.*, t.source_handle, t.x_url, t.media
+    SELECT d.*,
+           t.source_handle, t.x_url, t.media,
+           ti.local_path AS tiktok_local_path, ti.video_url AS tiktok_video_url, ti.source_url AS tiktok_source_url
     FROM drafts d
     LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
+    LEFT JOIN tiktok_items ti ON ti.id = d.tiktok_item_id
     WHERE d.id=$1
     `,
     [draftId]
   );
   if (r.rowCount === 0) return null;
-  return r.rows[0];
+  const row = r.rows[0];
+  row.x_url = row.x_url || row.tiktok_video_url || row.tiktok_source_url;
+  return row;
 }
 
 function buildFinalTextFromDraft(draft) {
@@ -710,11 +719,16 @@ async function directPostDraftNow(draftId) {
   if (!draft) throw new Error("Draft bulunamadı");
 
   const sourceLinkFallback = isSourceLinkFallbackFormat(draft.format_key);
-  if (!sourceLinkFallback) {
+  const tiktokFormat = isTikTokVideoFormat(draft.format_key);
+
+  if (!sourceLinkFallback && !tiktokFormat) {
     const mediaInspection = inspectStoredMedia(draft.media);
     if (!mediaInspection.ok) {
       throw new Error(mediaInspection.error || "Draft medyasi paylasim icin uygun degil.");
     }
+  }
+  if (tiktokFormat && !draft.tiktok_local_path) {
+    throw new Error("TikTok draft icin video dosyasi bulunamadi.");
   }
 
   const text = buildFinalTextFromDraft(draft);
@@ -729,7 +743,16 @@ async function directPostDraftNow(draftId) {
     throw new Error("Bu draft zaten paylaşılmış");
   }
 
-  const uploadedMedia = sourceLinkFallback ? null : await uploadDraftMediaToX(draft.media);
+  let uploadedMedia = null;
+  if (tiktokFormat && draft.tiktok_local_path) {
+    const pathModule = require("path");
+    const resolvedPath = pathModule.isAbsolute(draft.tiktok_local_path)
+      ? draft.tiktok_local_path
+      : pathModule.join(process.cwd(), draft.tiktok_local_path);
+    uploadedMedia = await uploadVideoFromLocalFile(resolvedPath, X_AUTH);
+  } else if (!sourceLinkFallback) {
+    uploadedMedia = await uploadDraftMediaToX(draft.media);
+  }
   const mediaIds = uploadedMedia ? [uploadedMedia.mediaId] : [];
 
   const posted = await xPostTweet(text, mediaIds);
@@ -1246,13 +1269,108 @@ app.post("/cancel-make-drafts", (req, res) => {
   }
 });
 
+let tiktokCollectorRunning = false;
+let tiktokMakeDraftsRunning = false;
+
+app.post("/run-tiktok-collector", async (req, res) => {
+  if (tiktokCollectorRunning) {
+    return res.status(409).json({ ok: false, error: "TikTok collector zaten calisiyor." });
+  }
+  tiktokCollectorRunning = true;
+  res.json({ ok: true, message: "TikTok collector baslatildi. Tamamlaninca sayfayi yenileyin." });
+  runScript("tiktok-collector-once.js")
+    .then(() => { tiktokCollectorRunning = false; })
+    .catch((err) => {
+      tiktokCollectorRunning = false;
+      console.error("TikTok collector hata:", err?.message || err);
+    });
+});
+
+app.post("/run-make-tiktok-drafts", async (req, res) => {
+  if (tiktokMakeDraftsRunning) {
+    return res.status(409).json({ ok: false, error: "Make-tiktok-drafts zaten calisiyor." });
+  }
+  tiktokMakeDraftsRunning = true;
+  res.json({ ok: true, message: "Make-tiktok-drafts baslatildi. Tamamlaninca sayfayi yenileyin." });
+  runScript("make-tiktok-drafts.js")
+    .then(() => { tiktokMakeDraftsRunning = false; })
+    .catch((err) => {
+      tiktokMakeDraftsRunning = false;
+      console.error("Make-tiktok-drafts hata:", err?.message || err);
+    });
+});
+
+app.get("/tiktok-ui", async (req, res) => {
+  try {
+    await ensureTikTokSchema(pool);
+    const sources = await pool
+      .query(
+        `SELECT id, url, active, last_checked_at, created_at FROM tiktok_sources ORDER BY id DESC LIMIT 100`
+      )
+      .then((r) => r.rows);
+    res.send(
+      renderTikTokPage({
+        sources,
+        helpers: uiHelpers,
+      })
+    );
+  } catch (e) {
+    res
+      .status(500)
+      .send(renderPageShell("Error", `<pre>${esc(e.stack || e.message)}</pre>`));
+  }
+});
+
+app.get("/tiktok-sources", async (req, res) => {
+  try {
+    await ensureTikTokSchema(pool);
+    const rows = await pool
+      .query(
+        `SELECT id, url, active, last_checked_at, created_at FROM tiktok_sources ORDER BY id DESC LIMIT 200`
+      )
+      .then((r) => r.rows);
+    res.json({ rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/tiktok-sources", async (req, res) => {
+  const url = (req.body?.url || "").trim();
+  if (!url || !url.includes("tiktok.com")) {
+    return res.status(400).json({ ok: false, error: "Gecerli bir TikTok URL gerekli." });
+  }
+  try {
+    await ensureTikTokSchema(pool);
+    await pool.query(
+      `INSERT INTO tiktok_sources (url, active) VALUES ($1, true)
+       ON CONFLICT (url) DO UPDATE SET active = true`,
+      [url]
+    );
+    res.json({ ok: true, message: "TikTok kaynagi eklendi." });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/tiktok-sources/:id/delete", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ ok: false, error: "ID gerekli." });
+  try {
+    const r = await pool.query(`DELETE FROM tiktok_sources WHERE id = $1 RETURNING id`, [id]);
+    res.json({ ok: r.rowCount > 0, deletedCount: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/drafts", async (req, res) => {
   const { status, queueView, pendingMedia, sourceFilter, categoryFilter } = normalizeInboxFilters(req.query);
   const limit = Math.min(Number(req.query.limit || 200), 500);
 
   try {
     const sourceCondition = sourceFilter
-      ? " AND t.source_handle ILIKE $5"
+      ? " AND (t.source_handle ILIKE $5 OR ti.author_handle ILIKE $5)"
       : "";
     const sourcePattern = sourceFilter ? `%${sourceFilter}%` : "";
     const categoryCondition = categoryFilter
@@ -1272,21 +1390,26 @@ app.get("/drafts", async (req, res) => {
       SELECT
         d.*,
         CASE WHEN d.status='queued' THEN 'approved' ELSE d.status END AS normalized_status,
-        t.text AS original_text,
-        t.source_handle,
-        t.x_url,
+        COALESCE(t.text, ti.caption) AS original_text,
+        COALESCE(t.source_handle, ti.author_handle) AS source_handle,
+        COALESCE(t.x_url, ti.video_url, ti.source_url) AS x_url,
         t.media,
-        t.has_media,
-        t.media_uploadable,
+        COALESCE(t.has_media, (ti.id IS NOT NULL)) AS has_media,
+        COALESCE(t.media_uploadable, (ti.local_path IS NOT NULL)) AS media_uploadable,
         t.media_validation_error,
         s.category AS source_category,
         q.id AS queue_id,
         q.scheduled_at,
-        q.status AS queue_status
+        q.status AS queue_status,
+        ti.id AS tiktok_item_id,
+        ti.local_path AS tiktok_local_path
       FROM drafts d
       LEFT JOIN tweets t ON t.tweet_id = d.tweet_id
-      LEFT JOIN sources s ON t.source_handle IS NOT NULL AND s.handle IS NOT NULL
-        AND LOWER(TRIM(BOTH '@' FROM t.source_handle)) = LOWER(TRIM(s.handle))
+      LEFT JOIN tiktok_items ti ON ti.id = d.tiktok_item_id
+      LEFT JOIN sources s ON (
+        (t.source_handle IS NOT NULL AND s.handle IS NOT NULL AND LOWER(TRIM(BOTH '@' FROM t.source_handle)) = LOWER(TRIM(s.handle)))
+        OR (ti.author_handle IS NOT NULL AND s.handle IS NOT NULL AND LOWER(TRIM(BOTH '@' FROM ti.author_handle)) = LOWER(TRIM(s.handle)))
+      )
       LEFT JOIN LATERAL (
         SELECT q1.id, q1.scheduled_at, q1.status
         FROM queue q1
@@ -1304,11 +1427,13 @@ app.get("/drafts", async (req, res) => {
           OR $3 = 'all'
           OR (
             $3 = 'video'
-            AND t.media IS NOT NULL
-            AND EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(t.media) AS m(elem)
-              WHERE m.elem->>'type' IN ('video', 'animated_gif')
+            AND (
+              (t.media IS NOT NULL AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(t.media) AS m(elem)
+                WHERE m.elem->>'type' IN ('video', 'animated_gif')
+              ))
+              OR (d.tiktok_item_id IS NOT NULL)
             )
           )
         )${sourceCondition}${categoryCondition}

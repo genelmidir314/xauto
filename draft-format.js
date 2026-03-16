@@ -1,9 +1,14 @@
 const COMMENT_TRANSLATION_FORMAT_KEY = "comment_plus_translation";
 const COMMENT_TRANSLATION_SOURCE_LINK_FORMAT_KEY =
   "comment_translation_source_link";
+const TIKTOK_VIDEO_FORMAT_KEY = "tiktok_video";
 
 function isSourceLinkFallbackFormat(formatKey) {
   return formatKey === COMMENT_TRANSLATION_SOURCE_LINK_FORMAT_KEY;
+}
+
+function isTikTokVideoFormat(formatKey) {
+  return formatKey === TIKTOK_VIDEO_FORMAT_KEY;
 }
 
 function composeDraftText(comment, translation, formatKey, xUrl, hashtags, useHashtags) {
@@ -14,6 +19,8 @@ function composeDraftText(comment, translation, formatKey, xUrl, hashtags, useHa
 
   let base;
   if (isSourceLinkFallbackFormat(formatKey)) {
+    base = [c, t, link].filter(Boolean).join("\n\n");
+  } else if (isTikTokVideoFormat(formatKey)) {
     base = [c, t, link].filter(Boolean).join("\n\n");
   } else if (formatKey === COMMENT_TRANSLATION_FORMAT_KEY) {
     if (c && t) base = `${c}\n\n${t}`;
@@ -32,6 +39,8 @@ function composeDraftText(comment, translation, formatKey, xUrl, hashtags, useHa
 module.exports = {
   COMMENT_TRANSLATION_FORMAT_KEY,
   COMMENT_TRANSLATION_SOURCE_LINK_FORMAT_KEY,
+  TIKTOK_VIDEO_FORMAT_KEY,
   composeDraftText,
   isSourceLinkFallbackFormat,
+  isTikTokVideoFormat,
 };

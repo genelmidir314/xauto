@@ -101,6 +101,10 @@ Aktif saatler (varsayılan 06:00–01:00 TR) ve minimum aralık (57 dk) içinde 
 | `trigger-post-now.js --draftId=N` | Belirli draft’ı hemen post eder |
 | `prepare-video-e2e.js` | Video E2E test hazırlığı |
 | `verify-video-e2e.js --draftId=N` | Video E2E doğrulama |
+| `tiktok-download.js <url>` | TikTok video indirir (yt-dlp) |
+| `tiktok-to-x-test.js <url> [--post]` | TikTok → indir → X'e yükle (test) |
+| `add-tiktok-source.js <url>` | TikTok URL'ini kaynak olarak ekler |
+| `tiktok-collector-once.js` | Kaynaklardan videoları indirir, tiktok_items'a yazar |
 
 ## Testler
 
@@ -117,6 +121,7 @@ npm run video:e2e:verify
 npm run post-now:trigger   # --draftId=... gerekli
 npm run post:delete       # X post silme
 npm run drafts:cleanup-invalid-media
+npm run tiktok:test       # TikTok URL ile indir + X upload testi
 ```
 
 ## Ortam değişkenleri

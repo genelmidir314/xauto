@@ -1,5 +1,7 @@
 node_modules/
 .env
+tiktok-downloads/
+.yt-dlp-bin/
 .env.*
 storageState.json
 *.log

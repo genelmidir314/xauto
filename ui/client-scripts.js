@@ -1029,6 +1029,108 @@ function renderNewsClientScript() {
   </script>`;
 }
 
+function renderTikTokClientScript() {
+  return `
+  <script>
+    (function() {
+      function qs(s,r){return(r||document).querySelector(s);}
+      async function sendJson(url,body){
+        const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
+        return r.json();
+      }
+      async function getJson(url){
+        const r=await fetch(url);
+        return r.json();
+      }
+      function setTiktokMessage(text, kind) {
+        const el = document.getElementById("tiktokMessage");
+        if (!el) return;
+        el.className = "message show " + (kind || "info");
+        el.textContent = text;
+      }
+      function setTiktokSourceMessage(text, kind) {
+        const el = document.getElementById("tiktokSourceMessage");
+        if (!el) return;
+        el.className = "message show " + (kind || "info");
+        el.textContent = text;
+      }
+
+      document.addEventListener("submit", async (e) => {
+        if (e.target?.id !== "tiktokSourceAddForm") return;
+        e.preventDefault();
+        const url = (qs("#tiktokSourceUrl", e.target)?.value || "").trim();
+        if (!url || !url.includes("tiktok.com")) {
+          setTiktokSourceMessage("Gecerli bir TikTok URL girin.", "error");
+          return;
+        }
+        const btn = qs("[data-tiktok-source-submit]", e.target);
+        if (btn) btn.disabled = true;
+        try {
+          const r = await sendJson("/tiktok-sources", { url });
+          if (!r.ok) throw new Error(r.error || "Ekleme basarisiz");
+          setTiktokSourceMessage("Kaynak eklendi. Yenileniyor...", "success");
+          setTimeout(() => location.reload(), 600);
+        } catch (err) {
+          setTiktokSourceMessage(err.message || "Hata", "error");
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      });
+
+      document.addEventListener("click", async (e) => {
+        const runCollector = e.target.closest('[data-action="run-tiktok-collector"]');
+        if (runCollector) {
+          runCollector.disabled = true;
+          try {
+            const r = await sendJson("/run-tiktok-collector", {});
+            if (!r.ok) throw new Error(r.error || "Basarisiz");
+            setTiktokMessage(r.message || "Collector baslatildi. Tamamlaninca sayfayi yenileyin.", "success");
+          } catch (err) {
+            setTiktokMessage(err.message || "Hata", "error");
+          }
+          runCollector.disabled = false;
+          return;
+        }
+
+        const runDrafts = e.target.closest('[data-action="run-make-tiktok-drafts"]');
+        if (runDrafts) {
+          runDrafts.disabled = true;
+          try {
+            const r = await sendJson("/run-make-tiktok-drafts", {});
+            if (!r.ok) throw new Error(r.error || "Basarisiz");
+            setTiktokMessage(r.message || "Make-tiktok-drafts baslatildi. Tamamlaninca sayfayi yenileyin.", "success");
+          } catch (err) {
+            setTiktokMessage(err.message || "Hata", "error");
+          }
+          runDrafts.disabled = false;
+          return;
+        }
+
+        const del = e.target.closest('[data-action="delete-tiktok-source"]');
+        if (del) {
+          const id = del.dataset.id;
+          if (!confirm("Bu TikTok kaynagi silinsin mi?")) return;
+          del.disabled = true;
+          try {
+            const r = await sendJson("/tiktok-sources/" + id + "/delete", {});
+            if (!r.ok) throw new Error(r.error || "Silinemedi");
+            const tr = del.closest("tr");
+            tr?.remove();
+            const tbody = tr?.closest("tbody");
+            if (tbody && !tbody.querySelector("tr")) {
+              tbody.innerHTML = '<tr><td colspan="4">TikTok kaynagi yok. Yukaridan URL ekleyin.</td></tr>';
+            }
+            setTiktokSourceMessage("Kaynak silindi.", "success");
+          } catch (err) {
+            setTiktokSourceMessage(err.message || "Hata", "error");
+          }
+          del.disabled = false;
+        }
+      });
+    })();
+  </script>`;
+}
+
 module.exports = {
   renderInboxClientScript,
   renderQueueClientScript,
@@ -1037,4 +1139,5 @@ module.exports = {
   renderFollowClientScript,
   renderReplyClientScript,
   renderNewsClientScript,
+  renderTikTokClientScript,
 };

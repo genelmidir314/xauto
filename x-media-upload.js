@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const OAuth = require("oauth-1.0a");
 const crypto = require("crypto");
 
@@ -430,6 +432,60 @@ async function uploadChunkedVideo(candidate, auth) {
   return mediaId;
 }
 
+/**
+ * Lokal dosyadan video yükler (TikTok vb. yt-dlp ile indirilen videolar için).
+ * @param {string} localPath - MP4 dosya yolu
+ * @param {object} auth - X auth (OAuth1a gerekli)
+ * @returns {{ mediaId: string, type: string }}
+ */
+async function uploadVideoFromLocalFile(localPath, auth) {
+  if (!hasOAuth1a(auth)) {
+    throw createError("Video upload icin OAuth1a gerekli.", 403);
+  }
+
+  const resolved = path.resolve(localPath);
+  if (!fs.existsSync(resolved)) {
+    throw createError(`Video dosyasi bulunamadi: ${resolved}`, 404);
+  }
+
+  const buffer = fs.readFileSync(resolved);
+  const ext = path.extname(resolved).toLowerCase() || ".mp4";
+  const contentType = ext === ".gif" ? "image/gif" : "video/mp4";
+  const mediaCategory = ext === ".gif" ? "tweet_gif" : "tweet_video";
+  const filename = path.basename(resolved) || "video.mp4";
+
+  const mediaId = await initChunkedUpload(
+    auth,
+    buffer.length,
+    contentType,
+    mediaCategory
+  );
+
+  let segmentIndex = 0;
+  for (let offset = 0; offset < buffer.length; offset += CHUNK_SIZE_BYTES) {
+    const chunk = buffer.subarray(offset, offset + CHUNK_SIZE_BYTES);
+    await appendChunk(
+      auth,
+      mediaId,
+      segmentIndex,
+      chunk,
+      contentType,
+      filename
+    );
+    segmentIndex += 1;
+  }
+
+  const finalizeResponse = await finalizeUpload(auth, mediaId);
+  if (finalizeResponse?.processing_info) {
+    await waitForProcessing(auth, mediaId);
+  }
+
+  return {
+    mediaId,
+    type: mediaCategory === "tweet_gif" ? "animated_gif" : "video",
+  };
+}
+
 async function uploadMediaFromStoredMedia(media, auth, options = {}) {
   const candidate = buildUploadCandidate(media);
   if (!candidate) return null;
@@ -474,4 +530,5 @@ module.exports = {
   NO_MP4_VARIANT_ERROR,
   parseStoredMedia,
   uploadMediaFromStoredMedia,
+  uploadVideoFromLocalFile,
 };

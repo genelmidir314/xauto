@@ -5,7 +5,7 @@ const {
   renderTopBar,
 } = require("./common");
 const { renderInboxClientScript } = require("./client-scripts");
-const { isSourceLinkFallbackFormat } = require("../draft-format");
+const { isSourceLinkFallbackFormat, isTikTokVideoFormat } = require("../draft-format");
 
 function renderInboxTabs(statuses, currentStatus, getCount, helpers, limit) {
   const { esc, fmtStatusPill } = helpers;
@@ -357,7 +357,8 @@ function renderInboxActions(row, previewLength, helpers) {
   }
 
   const sourceLinkFallback = isSourceLinkFallbackFormat(row.format_key);
-  const mediaBlocked = row.has_media && row.media_uploadable === false && !sourceLinkFallback;
+  const tiktokFormat = isTikTokVideoFormat(row.format_key);
+  const mediaBlocked = row.has_media && row.media_uploadable === false && !sourceLinkFallback && !tiktokFormat;
   const queueDisabled = mediaBlocked ? "disabled" : "";
   const queueFitAttr = mediaBlocked ? "" : ' data-requires-fit="true"';
   const buttons = [];
@@ -402,6 +403,8 @@ function renderInboxActions(row, previewLength, helpers) {
               : row.queue_status === "failed"
                 ? "Hata alindi. Yeniden siraya al ile tekrar denenecek."
                 : "Sirada. Iptal ile cikarilabilir.")
+          : tiktokFormat
+          ? "TikTok video: yerel dosyadan yuklenir."
           : sourceLinkFallback
           ? "Source link fallback: medya yuklenmeden kaynak tweet linkiyle paylasilir."
           : mediaBlocked
@@ -455,22 +458,25 @@ function renderInboxCard(row, helpers) {
           </div>
           ${viralReason ? `<div class="muted">reason: ${esc(viralReason)}</div>` : ""}
           ${sourceLinkFallback ? `<div class="muted">format: source link fallback</div>` : ""}
+          ${row.tiktok_item_id ? `<div class="muted">format: TikTok video</div>` : ""}
         </div>
 
         <div class="metaRight">
           <div class="muted mono">tweet_id: ${esc(tweetId)}</div>
           <div class="muted">kaynak: <b>${esc(source)}</b></div>
           ${row.source_category ? `<span class="pill" style="font-size:12px;">${esc(row.source_category)}</span>` : ""}
-          ${xUrl ? `<a class="btn" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer">X link</a>` : ""}
+          ${xUrl ? `<a class="btn" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer">${row.tiktok_item_id ? "TikTok" : "X"} link</a>` : ""}
         </div>
       </div>
 
       <div class="draftPanels">
         <section class="fieldStack">
-          <div class="label">Orijinal Tweet</div>
+          <div class="label">${row.tiktok_item_id ? "Orijinal TikTok" : "Orijinal Tweet"}</div>
           <div class="box">${esc(row.original_text || "(bulunamadi)")}</div>
           ${mediaWarning ? `<div class="message show error">${esc(mediaWarning)}</div>` : ""}
-          ${mediaHtml(row.media, xUrl)}
+          ${row.tiktok_item_id && xUrl
+            ? `<div class="mediaGrid"><div class="mediaItem"><a class="mediaLink" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer"><span class="mediaBadge">TikTok VIDEO</span></a></div></div>`
+            : mediaHtml(row.media, xUrl)}
         </section>
 
         <section class="fieldStack">
@@ -547,6 +553,7 @@ function renderInboxPage({
         title: "XAuto Inbox",
         subtitle: "Draft duzenleme, sira ve anlik paylasim merkezi",
         navItems: [
+          { href: "/tiktok-ui", label: "TikTok" },
           { href: "/sources-ui", label: "Sources UI" },
           { href: "/collector-ui", label: "Collector UI" },
           { href: "/reply-ui", label: "Reply" },
