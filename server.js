@@ -1335,10 +1335,20 @@ app.get("/tiktok-sources", async (req, res) => {
   }
 });
 
+function normalizeTikTokInput(input) {
+  const s = String(input || "").trim();
+  if (!s) return null;
+  if (s.includes("tiktok.com")) return s;
+  const username = s.replace(/^@/, "");
+  if (!username || !/^[\w.]+$/.test(username)) return null;
+  return `https://www.tiktok.com/@${username}`;
+}
+
 app.post("/tiktok-sources", async (req, res) => {
-  const url = (req.body?.url || "").trim();
-  if (!url || !url.includes("tiktok.com")) {
-    return res.status(400).json({ ok: false, error: "Gecerli bir TikTok URL gerekli." });
+  const input = (req.body?.input || req.body?.url || "").trim();
+  const url = normalizeTikTokInput(input);
+  if (!url) {
+    return res.status(400).json({ ok: false, error: "Kullanici adi (@username) veya gecerli TikTok URL girin." });
   }
   try {
     await ensureTikTokSchema(pool);

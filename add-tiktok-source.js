@@ -21,17 +21,28 @@ function getArg(name, fallback = null) {
   return arg.split("=").slice(1).join("=") || fallback;
 }
 
-function getUrlFromArgs() {
+function getInputFromArgs() {
   const url = getArg("url");
   if (url) return url;
-  const pos = process.argv.findIndex((a) => a.startsWith("http"));
+  const pos = process.argv.findIndex((a) => a.startsWith("http") || a.startsWith("@") || /^[\w.]+$/.test(a));
   return pos >= 0 ? process.argv[pos] : null;
 }
 
+function normalizeTikTokInput(input) {
+  const s = String(input || "").trim();
+  if (!s) return null;
+  if (s.includes("tiktok.com")) return s;
+  const username = s.replace(/^@/, "");
+  if (!username || !/^[\w.]+$/.test(username)) return null;
+  return `https://www.tiktok.com/@${username}`;
+}
+
 async function run() {
-  const url = getUrlFromArgs();
-  if (!url || !url.includes("tiktok.com")) {
-    console.error("Kullanim: node add-tiktok-source.js <tiktok_url>");
+  const input = getInputFromArgs();
+  const url = normalizeTikTokInput(input);
+  if (!url) {
+    console.error("Kullanim: node add-tiktok-source.js @username");
+    console.error("  veya: node add-tiktok-source.js <tiktok_url>");
     process.exit(1);
   }
 

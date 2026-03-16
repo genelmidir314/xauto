@@ -1058,15 +1058,15 @@ function renderTikTokClientScript() {
       document.addEventListener("submit", async (e) => {
         if (e.target?.id !== "tiktokSourceAddForm") return;
         e.preventDefault();
-        const url = (qs("#tiktokSourceUrl", e.target)?.value || "").trim();
-        if (!url || !url.includes("tiktok.com")) {
-          setTiktokSourceMessage("Gecerli bir TikTok URL girin.", "error");
+        const input = (qs("#tiktokSourceInput", e.target)?.value || "").trim();
+        if (!input) {
+          setTiktokSourceMessage("Kullanici adi veya URL girin.", "error");
           return;
         }
         const btn = qs("[data-tiktok-source-submit]", e.target);
         if (btn) btn.disabled = true;
         try {
-          const r = await sendJson("/tiktok-sources", { url });
+          const r = await sendJson("/tiktok-sources", { input });
           if (!r.ok) throw new Error(r.error || "Ekleme basarisiz");
           setTiktokSourceMessage("Kaynak eklendi. Yenileniyor...", "success");
           setTimeout(() => location.reload(), 600);

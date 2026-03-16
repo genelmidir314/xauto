@@ -95,6 +95,34 @@ async function downloadTikTokVideo(url, outputDir = TIKTOK_DOWNLOAD_DIR) {
   return { localPath, metadata };
 }
 
+/** Kullanici profilinden video URL listesi alir (yt-dlp --flat-playlist). */
+async function getTikTokUserVideoUrls(userProfileUrl, limit = 10) {
+  const cleanUrl = String(userProfileUrl || "").trim();
+  if (!cleanUrl || !cleanUrl.includes("tiktok.com") || cleanUrl.includes("/video/")) {
+    throw new Error("Kullanici profil URL gerekli (orn: https://tiktok.com/@username)");
+  }
+
+  const ytDlpPath = await ensureYtDlp();
+  const ytDlp = new YTDlpWrap(ytDlpPath);
+
+  const args = [
+    cleanUrl,
+    "--flat-playlist",
+    "--print",
+    "%(webpage_url)s",
+    "-I",
+    `1:${Math.min(limit, 20)}`,
+    "--no-warnings",
+  ];
+
+  const stdout = await ytDlp.execPromise(args);
+  const urls = (stdout || "")
+    .split("\n")
+    .map((u) => u.trim())
+    .filter((u) => u && u.includes("/video/"));
+  return urls;
+}
+
 async function run() {
   const url = getUrlFromArgs();
   if (!url) {
@@ -115,4 +143,8 @@ if (require.main === module) {
   });
 }
 
-module.exports = { downloadTikTokVideo, TIKTOK_DOWNLOAD_DIR };
+module.exports = {
+  downloadTikTokVideo,
+  getTikTokUserVideoUrls,
+  TIKTOK_DOWNLOAD_DIR,
+};

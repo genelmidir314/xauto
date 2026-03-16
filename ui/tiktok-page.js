@@ -13,14 +13,14 @@ function renderTikTokSourcesCard(sources, helpers) {
       <div class="meta">
         <div class="titleBlock">
           <div style="font-weight:700;">TikTok Kaynaklari</div>
-          <div class="settingsHelp">Viral TikTok videolarinin URL'lerini ekleyin. Collector videolari indirir, make-drafts OpenAI yorumu ile draft uretir.</div>
+          <div class="settingsHelp">Kullanici adi (@username) veya video URL ekleyin. Kullanici eklenirse profilindeki videolar scrape edilir.</div>
         </div>
       </div>
 
       <form id="tiktokSourceAddForm" class="formGrid">
         <label class="field" style="grid-column: 1 / -1;">
-          <span class="label">TikTok video URL</span>
-          <input class="input" id="tiktokSourceUrl" name="url" type="url" placeholder="https://www.tiktok.com/@user/video/123456789" style="width:100%;" />
+          <span class="label">Kullanici adi veya video URL</span>
+          <input class="input" id="tiktokSourceInput" name="input" type="text" placeholder="@username veya https://tiktok.com/@user/video/123" style="width:100%;" />
         </label>
       </form>
 
@@ -33,7 +33,7 @@ function renderTikTokSourcesCard(sources, helpers) {
         <table class="statusTable">
           <thead>
             <tr>
-              <th>URL</th>
+              <th>Kaynak (kullanici / URL)</th>
               <th>aktif</th>
               <th>son kontrol</th>
               <th>islem</th>
@@ -56,7 +56,7 @@ function renderTikTokSourcesCard(sources, helpers) {
               `
                     )
                     .join("")
-                : `<tr><td colspan="4">TikTok kaynagi yok. Yukaridan URL ekleyin.</td></tr>`
+                : `<tr><td colspan="4">TikTok kaynagi yok. Yukaridan kullanici adi veya URL ekleyin.</td></tr>`
             }
           </tbody>
         </table>

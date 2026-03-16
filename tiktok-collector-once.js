@@ -12,7 +12,11 @@ require("dotenv").config();
 const { Pool } = require("pg");
 const path = require("path");
 const { ensureTikTokSchema } = require("./ensure-tiktok-schema");
-const { downloadTikTokVideo, TIKTOK_DOWNLOAD_DIR } = require("./tiktok-download");
+const {
+  downloadTikTokVideo,
+  getTikTokUserVideoUrls,
+  TIKTOK_DOWNLOAD_DIR,
+} = require("./tiktok-download");
 
 if (!process.env.DATABASE_URL) {
   console.error("❌ DATABASE_URL yok");
@@ -28,6 +32,13 @@ const pool = new Pool({
 const SAME_USER_MIN_WAIT_SECONDS = Number(
   process.env.TIKTOK_SAME_USER_WAIT_SECONDS || 120
 );
+
+/** Kullanici profili scrape ederken kac video alinacak. */
+const USER_VIDEO_LIMIT = Number(process.env.TIKTOK_USER_VIDEO_LIMIT || 10);
+
+function isUserProfileUrl(url) {
+  return url && url.includes("tiktok.com") && !url.includes("/video/");
+}
 
 function scoreViral(viewCount, likeCount, commentCount) {
   const v = Number(viewCount) || 0;
@@ -63,49 +74,67 @@ async function run() {
 
   console.log(`✅ Kaynak sayisi: ${sources.rows.length}`);
 
+  async function processVideoUrl(videoUrl, sourceUrl) {
+    const result = await downloadTikTokVideo(videoUrl, TIKTOK_DOWNLOAD_DIR);
+    const localPath = result.localPath || result;
+    const meta = result.metadata || {};
+    const videoId = meta.id || path.basename(localPath, path.extname(localPath));
+    const author = meta.uploader || meta.uploader_id || meta.creator || null;
+    const caption = meta.title || meta.description || null;
+    const viewCount = meta.view_count ?? meta.play_count ?? 0;
+    const likeCount = meta.like_count ?? 0;
+    const commentCount = meta.comment_count ?? 0;
+    const viralScore = scoreViral(viewCount, likeCount, commentCount);
+    const created = meta.timestamp ? new Date(meta.timestamp * 1000) : null;
+
+    await pool.query(
+      `
+      INSERT INTO tiktok_items
+      (video_id, source_url, author_handle, caption, video_url, local_path,
+       view_count, like_count, comment_count, viral_score, created_at, ingested_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+      ON CONFLICT (video_id) DO UPDATE SET
+        local_path = EXCLUDED.local_path,
+        view_count = EXCLUDED.view_count,
+        like_count = EXCLUDED.like_count,
+        comment_count = EXCLUDED.comment_count,
+        viral_score = EXCLUDED.viral_score,
+        caption = COALESCE(EXCLUDED.caption, tiktok_items.caption)
+      `,
+      [
+        videoId,
+        sourceUrl,
+        author,
+        caption,
+        videoUrl,
+        localPath,
+        viewCount,
+        likeCount,
+        commentCount,
+        viralScore,
+        created,
+      ]
+    );
+    return { videoId, viralScore };
+  }
+
   for (const s of sources.rows) {
     const url = s.url;
     try {
-      const result = await downloadTikTokVideo(url, TIKTOK_DOWNLOAD_DIR);
-      const localPath = result.localPath || result;
-      const meta = result.metadata || {};
-      const videoId = meta.id || path.basename(localPath, path.extname(localPath));
-      const author = meta.uploader || meta.uploader_id || meta.creator || null;
-      const caption = meta.title || meta.description || null;
-      const viewCount = meta.view_count ?? meta.play_count ?? 0;
-      const likeCount = meta.like_count ?? 0;
-      const commentCount = meta.comment_count ?? 0;
-      const viralScore = scoreViral(viewCount, likeCount, commentCount);
-      const created = meta.timestamp ? new Date(meta.timestamp * 1000) : null;
-
-      await pool.query(
-        `
-        INSERT INTO tiktok_items
-        (video_id, source_url, author_handle, caption, video_url, local_path,
-         view_count, like_count, comment_count, viral_score, created_at, ingested_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-        ON CONFLICT (video_id) DO UPDATE SET
-          local_path = EXCLUDED.local_path,
-          view_count = EXCLUDED.view_count,
-          like_count = EXCLUDED.like_count,
-          comment_count = EXCLUDED.comment_count,
-          viral_score = EXCLUDED.viral_score,
-          caption = COALESCE(EXCLUDED.caption, tiktok_items.caption)
-        `,
-        [
-          videoId,
-          url,
-          author,
-          caption,
-          url,
-          localPath,
-          viewCount,
-          likeCount,
-          commentCount,
-          viralScore,
-          created,
-        ]
-      );
+      if (isUserProfileUrl(url)) {
+        const videoUrls = await getTikTokUserVideoUrls(url, USER_VIDEO_LIMIT);
+        for (const videoUrl of videoUrls) {
+          try {
+            const { videoId, viralScore } = await processVideoUrl(videoUrl, url);
+            console.log(`✅ ${url} -> video_id=${videoId} score=${viralScore}`);
+          } catch (e) {
+            console.error(`❌ ${videoUrl}: ${e.message}`);
+          }
+        }
+      } else {
+        const { videoId, viralScore } = await processVideoUrl(url, url);
+        console.log(`✅ ${url.slice(0, 50)}...: video_id=${videoId} score=${viralScore}`);
+      }
 
       await pool.query(
         `
@@ -115,10 +144,6 @@ async function run() {
         WHERE id = $1
         `,
         [s.id, String(SAME_USER_MIN_WAIT_SECONDS)]
-      );
-
-      console.log(
-        `✅ ${url.slice(0, 50)}...: video_id=${videoId} score=${viralScore}`
       );
     } catch (e) {
       console.error(`❌ ${url}: ${e.message}`);
