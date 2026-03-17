@@ -196,17 +196,18 @@ async function ensureCooldownAndWindow() {
 
   if (last) {
     const diffMs = now.getTime() - last.getTime();
-    const minMs = scheduleSettings.minPostIntervalMinutes * 60_000;
+    const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
+    const minInterval = Math.min(...intervals);
+    const minMs = minInterval * 60_000;
 
     if (diffMs < minMs) {
       const waitMs = minMs - diffMs;
       const waitMin = Math.ceil(waitMs / 60_000);
+      const intervalText = intervals.length > 1 ? `min ${minInterval} dk (${intervals.join("-")} döngü)` : `${minInterval} dk`;
       console.log(
         `⏸️ Cooldown: Son post ${Math.floor(
           diffMs / 60_000
-        )} dk önce. En az ${
-          scheduleSettings.minPostIntervalMinutes
-        } dk olmalı. ~${waitMin} dk bekliyorum.`
+        )} dk önce. En az ${intervalText}. ~${waitMin} dk bekliyorum.`
       );
       await sleep(Math.max(30_000, waitMs));
       return false;
@@ -583,12 +584,14 @@ async function main() {
   await ensureScheduleSettingsTable(pool);
   const scheduleSettings = await getScheduleSettings(pool);
   console.log("🚀 Poster Worker başladı");
+  const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
+  const intervalText = intervals.length > 1 ? intervals.join("-") + "m (döngü)" : scheduleSettings.minPostIntervalMinutes + "m";
   console.log(
     `poll=${POLL_SECONDS}s maxAttempts=${MAX_ATTEMPTS} dryRun=${DRY_RUN} | window=${formatHourLabel(
       scheduleSettings.activeStartHour
     )}-${formatHourLabel(
       scheduleSettings.activeEndHour
-    )} | minInterval=${scheduleSettings.minPostIntervalMinutes}m`
+    )} | minInterval=${intervalText}`
   );
 
   if (!hasOAuth1a() && !hasOAuth2UserToken()) {

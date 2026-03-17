@@ -109,6 +109,7 @@ async function init() {
       active_start_hour INTEGER NOT NULL,
       active_end_hour INTEGER NOT NULL,
       min_post_interval_minutes INTEGER NOT NULL,
+      post_interval_minutes JSONB,
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);

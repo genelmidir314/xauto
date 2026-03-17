@@ -99,7 +99,11 @@ function renderScheduleSettingsCard(scheduleSettings, esc) {
         <div class="settingsMeta muted">
           <span data-schedule-summary>${esc(
             scheduleSettings.activeWindowText
-          )} · ${esc(scheduleSettings.minPostIntervalMinutes)} dk</span>
+          )} · ${esc(
+            (scheduleSettings.postIntervalMinutes || []).length > 1
+              ? scheduleSettings.postIntervalMinutes.join("-") + " dk (döngü)"
+              : scheduleSettings.minPostIntervalMinutes + " dk"
+          )}</span>
           <span data-schedule-daily-limit>gunluk kapasite: ${esc(
             scheduleSettings.dailyLimit
           )}</span>
@@ -120,9 +124,9 @@ function renderScheduleSettingsCard(scheduleSettings, esc) {
           )}" />
         </label>
         <label class="field">
-          <span class="label">Paylasim araligi (dakika)</span>
-          <input class="input" id="scheduleIntervalMinutes" name="minPostIntervalMinutes" type="number" min="5" max="1440" step="1" value="${esc(
-            scheduleSettings.minPostIntervalMinutes
+          <span class="label">Paylasim araligi (dakika, virgülle ayir: 17, 21, 15, 16)</span>
+          <input class="input" id="scheduleIntervalMinutes" name="postIntervalMinutes" type="text" placeholder="17, 21, 15, 16" value="${esc(
+            (scheduleSettings.postIntervalMinutes || [scheduleSettings.minPostIntervalMinutes]).join(", ")
           )}" />
         </label>
       </form>

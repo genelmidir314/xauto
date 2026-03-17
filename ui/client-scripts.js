@@ -14,10 +14,14 @@ function renderScheduleSettingsScriptBody() {
         event.preventDefault();
         const submit = qs("[data-schedule-submit]");
         const fields = qsa("input", form);
+        const intervalRaw = String(qs("#scheduleIntervalMinutes", form)?.value || "").trim();
+        const postIntervalMinutes = intervalRaw
+          ? intervalRaw.split(/[,\s]+/).map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n) && n >= 5 && n <= 1440)
+          : [];
         const body = {
           activeStartHour: Number(qs("#scheduleStartHour", form)?.value),
           activeEndHour: Number(qs("#scheduleEndHour", form)?.value),
-          minPostIntervalMinutes: Number(qs("#scheduleIntervalMinutes", form)?.value),
+          postIntervalMinutes: postIntervalMinutes.length > 0 ? postIntervalMinutes : intervalRaw,
         };
 
         if (submit) submit.disabled = true;
@@ -31,11 +35,11 @@ function renderScheduleSettingsScriptBody() {
 
           const summary = qs("[data-schedule-summary]");
           if (summary && result.scheduleSettings) {
-            summary.textContent =
-              result.scheduleSettings.activeWindowText +
-              " · " +
-              result.scheduleSettings.minPostIntervalMinutes +
-              " dk";
+            const intervals = result.scheduleSettings.postIntervalMinutes || [];
+            const intervalText = intervals.length > 1
+              ? intervals.join("-") + " dk (döngü)"
+              : (result.scheduleSettings.minPostIntervalMinutes || 57) + " dk";
+            summary.textContent = result.scheduleSettings.activeWindowText + " · " + intervalText;
           }
 
           const dailyLimit = qs("[data-schedule-daily-limit]");

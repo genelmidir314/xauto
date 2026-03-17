@@ -4,6 +4,8 @@ const {
   computeActiveWindowMinutes,
   computeDailyLimit,
   formatHourLabel,
+  getIntervalForSlot,
+  parsePostIntervals,
   toPublicScheduleSettings,
   validateScheduleSettingsInput,
 } = require("../schedule-settings");
@@ -39,9 +41,34 @@ describe("schedule-settings", () => {
     assert.strictEqual(computeActiveWindowMinutes({ activeStartHour: 22, activeEndHour: 6 }), 8 * 60);
   });
 
-  it("computeDailyLimit uses min interval", () => {
+  it("computeDailyLimit uses min interval (single)", () => {
     const s = { activeStartHour: 6, activeEndHour: 22, minPostIntervalMinutes: 60 };
     assert.strictEqual(computeDailyLimit(s), 16);
+  });
+
+  it("computeDailyLimit uses average for multi-interval", () => {
+    const s = { activeStartHour: 6, activeEndHour: 22, postIntervalMinutes: [17, 21, 15, 16] };
+    const activeMinutes = 16 * 60;
+    const avgInterval = (17 + 21 + 15 + 16) / 4;
+    assert.strictEqual(computeDailyLimit(s), Math.floor(activeMinutes / avgInterval));
+  });
+
+  it("getIntervalForSlot cycles through intervals", () => {
+    const intervals = [17, 21, 15, 16];
+    assert.strictEqual(getIntervalForSlot(intervals, 0), 17);
+    assert.strictEqual(getIntervalForSlot(intervals, 1), 21);
+    assert.strictEqual(getIntervalForSlot(intervals, 2), 15);
+    assert.strictEqual(getIntervalForSlot(intervals, 3), 16);
+    assert.strictEqual(getIntervalForSlot(intervals, 4), 17);
+    assert.strictEqual(getIntervalForSlot(intervals, 5), 21);
+  });
+
+  it("parsePostIntervals from array", () => {
+    assert.deepStrictEqual(parsePostIntervals({ post_interval_minutes: [17, 21, 15, 16] }), [17, 21, 15, 16]);
+  });
+
+  it("parsePostIntervals fallback to min when array null", () => {
+    assert.deepStrictEqual(parsePostIntervals({ min_post_interval_minutes: 57 }), [57]);
   });
 
   it("toPublicScheduleSettings returns dailyLimit and activeWindowText", () => {
@@ -52,10 +79,25 @@ describe("schedule-settings", () => {
 
   it("validateScheduleSettingsInput throws on bad input", () => {
     assert.throws(() => validateScheduleSettingsInput({ activeStartHour: 25 }), /Baslangic saati/);
-    assert.throws(
-      () => validateScheduleSettingsInput({ activeStartHour: 6, activeEndHour: 22, minPostIntervalMinutes: 2 }),
-      /Paylasim araligi/
-    );
+    assert.throws(() => validateScheduleSettingsInput({ activeStartHour: 6, activeEndHour: 22 }), /Paylasim araligi bos/);
+  });
+
+  it("validateScheduleSettingsInput accepts postIntervalMinutes array", () => {
+    const out = validateScheduleSettingsInput({
+      activeStartHour: 6,
+      activeEndHour: 22,
+      postIntervalMinutes: [17, 21, 15, 16],
+    });
+    assert.deepStrictEqual(out.postIntervalMinutes, [17, 21, 15, 16]);
+  });
+
+  it("validateScheduleSettingsInput accepts postIntervalMinutes string", () => {
+    const out = validateScheduleSettingsInput({
+      activeStartHour: 6,
+      activeEndHour: 22,
+      postIntervalMinutes: "17, 21, 15, 16",
+    });
+    assert.deepStrictEqual(out.postIntervalMinutes, [17, 21, 15, 16]);
   });
 });
 

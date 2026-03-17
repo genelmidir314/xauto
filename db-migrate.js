@@ -155,6 +155,11 @@ async function migrate() {
   `);
 
   await pool.query(`
+    ALTER TABLE schedule_settings
+    ADD COLUMN IF NOT EXISTS post_interval_minutes JSONB;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS tiktok_sources (
       id SERIAL PRIMARY KEY,
       url TEXT NOT NULL UNIQUE,

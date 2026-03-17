@@ -33,6 +33,7 @@ const {
 const { uploadVideoFromLocalFile } = require("./x-media-upload");
 const {
   ensureScheduleSettingsTable,
+  getIntervalForSlot,
   getScheduleSettings,
   updateScheduleSettings,
   formatHourLabel,
@@ -540,8 +541,10 @@ async function getSchedulingAnchor(scheduleSettingsArg) {
   const anchor = new Date(anchorQ.rows[0].scheduled_at);
   // Gelecekteki anchor'ları engelle (hatalı veri / önceki bug)
   const effectiveAnchor = anchor.getTime() > now.getTime() ? now : anchor;
+  const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
+  const firstInterval = getIntervalForSlot(intervals, 0);
   const next = new Date(
-    effectiveAnchor.getTime() + scheduleSettings.minPostIntervalMinutes * 60 * 1000
+    effectiveAnchor.getTime() + firstInterval * 60 * 1000
   );
   return normalizeToActiveWindow(maxDate(next, now), scheduleSettings);
 }
@@ -558,16 +561,17 @@ async function rescheduleWaitingQueue(scheduleSettingsArg) {
   if (waitingQ.rowCount === 0) return 0;
 
   let slot = await getSchedulingAnchor(scheduleSettings);
+  const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
 
-  for (const row of waitingQ.rows) {
+  for (let i = 0; i < waitingQ.rows.length; i++) {
+    const row = waitingQ.rows[i];
     await pool.query(
       `UPDATE queue SET scheduled_at=$2, updated_at=NOW() WHERE id=$1`,
       [row.id, slot]
     );
 
-    slot = new Date(
-      slot.getTime() + scheduleSettings.minPostIntervalMinutes * 60 * 1000
-    );
+    const nextInterval = getIntervalForSlot(intervals, i + 1);
+    slot = new Date(slot.getTime() + nextInterval * 60 * 1000);
     slot = normalizeToActiveWindow(slot, scheduleSettings);
   }
 
@@ -577,6 +581,9 @@ async function rescheduleWaitingQueue(scheduleSettingsArg) {
 /** Sadece okuma - reschedule YAPMAZ. Dashboard/gösterim için. */
 async function getNextSlotForDisplay(scheduleSettingsArg) {
   const scheduleSettings = scheduleSettingsArg || (await getScheduleSettings(pool));
+  const waitingCount = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM queue WHERE status = 'waiting'`
+  );
   const lastWaiting = await pool.query(`
     SELECT scheduled_at
     FROM queue
@@ -585,9 +592,11 @@ async function getNextSlotForDisplay(scheduleSettingsArg) {
     LIMIT 1
   `);
   if (lastWaiting.rowCount > 0) {
+    const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
+    const nextInterval = getIntervalForSlot(intervals, waitingCount.rows[0].n);
     const next = new Date(
       new Date(lastWaiting.rows[0].scheduled_at).getTime() +
-        scheduleSettings.minPostIntervalMinutes * 60 * 1000
+        nextInterval * 60 * 1000
     );
     return normalizeToActiveWindow(next, scheduleSettings);
   }
@@ -610,9 +619,14 @@ async function computeNextScheduleAt(scheduleSettingsArg) {
     return await getSchedulingAnchor(scheduleSettings);
   }
 
+  const waitingCount = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM queue WHERE status = 'waiting'`
+  );
+  const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
+  const nextInterval = getIntervalForSlot(intervals, waitingCount.rows[0].n);
   const next = new Date(
     new Date(lastWaiting.rows[0].scheduled_at).getTime() +
-      scheduleSettings.minPostIntervalMinutes * 60 * 1000
+      nextInterval * 60 * 1000
   );
   return normalizeToActiveWindow(next, scheduleSettings);
 }
@@ -1242,7 +1256,9 @@ app.post("/schedule-settings", async (req, res) => {
         scheduleSettings.activeStartHour
       )}-${formatHourLabel(
         scheduleSettings.activeEndHour
-      )} / ${scheduleSettings.minPostIntervalMinutes} dk`,
+      )} / ${(scheduleSettings.postIntervalMinutes || []).length > 1
+        ? scheduleSettings.postIntervalMinutes.join("-") + " dk (döngü)"
+        : scheduleSettings.minPostIntervalMinutes + " dk"}`,
     });
   } catch (e) {
     res.status(400).json({ error: e.message });
