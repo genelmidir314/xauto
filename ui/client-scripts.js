@@ -242,7 +242,7 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
         return {
           comment_tr: qs('[data-field="comment"]', card)?.value ?? "",
           translation_tr: qs('[data-field="translation"]', card)?.value ?? "",
-          use_comment: useCommentEl ? useCommentEl.checked : true,
+          use_comment: useCommentEl ? useCommentEl.checked : false,
           hashtags_tr: qs('[data-field="hashtags"]', card)?.value ?? "",
           use_hashtags: useHashtagsEl ? useHashtagsEl.checked : false,
         };
@@ -250,7 +250,7 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
 
       function getPreviewText(card) {
         const payload = payloadFor(card);
-        const useComment = payload.use_comment !== false;
+        const useComment = payload.use_comment === true;
         const comment = useComment ? payload.comment_tr.trim() : "";
         const translation = payload.translation_tr.trim();
         const hashtags = payload.hashtags_tr.trim();
@@ -446,9 +446,6 @@ function renderInboxClientScript(currentStatus, currentQueueView = "all") {
             if (commentEl) {
               commentEl.value = result.comment_tr || "";
             }
-            card.dataset.useComment = "true";
-            const useCommentCheck = qs('[data-field="use-comment"]', card);
-            if (useCommentCheck) useCommentCheck.checked = true;
             setMessage(card, "Yorum yenilendi.", "success");
           } else if (action === "regenerate-hashtags") {
             result = await sendJson("/drafts/" + id + "/regenerate-hashtags", {});

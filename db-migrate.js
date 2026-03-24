@@ -36,7 +36,7 @@ async function migrate() {
     ADD COLUMN IF NOT EXISTS viral_score INTEGER,
     ADD COLUMN IF NOT EXISTS viral_reason TEXT,
     ADD COLUMN IF NOT EXISTS scored_at TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT true;
+    ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT false;
   `);
 
   await pool.query(`
@@ -157,6 +157,11 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE schedule_settings
     ADD COLUMN IF NOT EXISTS post_interval_minutes JSONB;
+  `);
+
+  await pool.query(`
+    ALTER TABLE drafts
+    ALTER COLUMN use_comment SET DEFAULT false;
   `);
 
   await pool.query(`

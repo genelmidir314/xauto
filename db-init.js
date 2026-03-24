@@ -56,7 +56,7 @@ async function init() {
       tweet_id TEXT UNIQUE NOT NULL,
       comment_tr TEXT,
       translation_tr TEXT,
-      use_comment BOOLEAN NOT NULL DEFAULT true,
+      use_comment BOOLEAN NOT NULL DEFAULT false,
       hashtags_tr TEXT,
       use_hashtags BOOLEAN NOT NULL DEFAULT false,
       format_key TEXT,
@@ -69,7 +69,7 @@ async function init() {
   `);
 
   await pool.query(`
-    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS use_comment BOOLEAN NOT NULL DEFAULT false;
   `);
   await pool.query(`
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS hashtags_tr TEXT, ADD COLUMN IF NOT EXISTS use_hashtags BOOLEAN NOT NULL DEFAULT false;

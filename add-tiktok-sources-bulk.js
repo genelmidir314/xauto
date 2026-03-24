@@ -17,16 +17,15 @@ function normalizeTikTokInput(input) {
 }
 
 const USERNAMES = [
-  "khaby.lame", "zachking", "kallmekris", "youneszarou", "hannahstocking",
-  "kingbach", "bretmanrock", "justmaiko", "spencerx", "wisdomkaye",
-  "druski", "alexojeda", "larray", "gilmhercroes", "scarletvas",
-  "433", "433football", "f2freestylers", "brfootball", "footballjoe",
-  "trollfootball", "houseofhighlights", "skysportsfootball", "goalglobal",
-  "onefootball", "daznfootball", "cbssportsgolazo", "espnfc", "premierleague",
-  "championsleague", "nba", "overtime", "slamonline", "ballislife",
-  "espn", "bleacherreport", "nbagleague", "nbatv", "nbaontnt", "sportbible",
-  "overtimekicks", "overtimebasketball", "dudeperfect", "barstoolsports",
-  "sidemen", "goatfootball", "sportcentral", "thef2", "goal", "sportscenter",
+  "charlidamelio", "addisonre", "bellapoarch", "avani", "twinmelody",
+  "nishaguragain", "domelipa", "yodelinghaley", "itsjojosiwa", "hannahstocking",
+  "lexibrookerivera", "baileygrey", "carlalazzari", "daniellegersh", "alixearle",
+  "oliviadunne", "madi", "lorengray", "annaxsitar", "briannam",
+  "sofiamuse", "elenagenevinne", "valentinafradegrada", "anokhina_liza", "nataliesole",
+  "veronicabielik", "dancemoms", "dancewithme", "justmaiko_female", "addisonreclips",
+  "sofiiiiagomez", "itsjojosiwa_fans",
+  "justmaiko", "michael.le", "noahbeck", "spencerx", "jasonderulo",
+  "tonylopez", "ondreazlopez", "riyaz.14",
 ];
 
 async function run() {

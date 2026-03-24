@@ -399,8 +399,8 @@ async function run() {
     await pool.query(
       `
       INSERT INTO drafts
-      (tweet_id, comment_tr, translation_tr, hashtags_tr, format_key, status, created_at, viral_score, viral_reason)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
+      (tweet_id, comment_tr, translation_tr, hashtags_tr, format_key, status, use_comment, created_at, viral_score, viral_reason)
+      VALUES ($1, $2, $3, $4, $5, $6, false, NOW(), $7, $8)
       `,
       [
         tweetId,

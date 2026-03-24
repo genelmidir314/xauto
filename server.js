@@ -724,7 +724,7 @@ async function loadDraftFull(draftId) {
 }
 
 function buildFinalTextFromDraft(draft) {
-  const comment = draft.use_comment !== false ? draft.comment_tr : "";
+  const comment = draft.use_comment === true ? draft.comment_tr : "";
   return composeDraftText(
     comment,
     draft.translation_tr,

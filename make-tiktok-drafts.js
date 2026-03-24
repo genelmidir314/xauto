@@ -77,8 +77,8 @@ async function run() {
     await pool.query(
       `
       INSERT INTO drafts
-      (tweet_id, comment_tr, translation_tr, format_key, status, viral_score, viral_reason, tiktok_item_id)
-      VALUES ($1, $2, $3, $4, 'pending', $5, 'tiktok', $6)
+      (tweet_id, comment_tr, translation_tr, format_key, status, use_comment, viral_score, viral_reason, tiktok_item_id)
+      VALUES ($1, $2, $3, $4, 'pending', false, $5, 'tiktok', $6)
       ON CONFLICT (tweet_id) DO NOTHING
       `,
       [tweetId, finalText, translationTr, TIKTOK_VIDEO_FORMAT_KEY, row.viral_score || 50, row.id]

@@ -31,7 +31,7 @@ function sleep(ms) {
 }
 
 function composeFinalText(d) {
-  const comment = d.use_comment !== false ? d.comment_tr : "";
+  const comment = d.use_comment === true ? d.comment_tr : "";
   return composeDraftText(comment, d.translation_tr, d.format_key, d.x_url, d.hashtags_tr, d.use_hashtags);
 }
 
