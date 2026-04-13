@@ -9,7 +9,8 @@
  * - Queue cancel
  * - Auto reschedule after cancel / add
  * - Media upload support for "Post now"
- * - Poster worker otomatik başlatılır (XAUTO_SKIP_POSTER_WORKER=true ile devre dışı)
+ * - Poster worker: alt process veya XAUTO_INLINE_POSTER_WORKER=true ile ayni process (PaaS cocuk process oldurebilir)
+ * - XAUTO_SKIP_POSTER_WORKER=true: kuyruk isleyici kapali
  *
  * Çalıştır:
  *   node server.js
@@ -38,6 +39,10 @@ const {
   updateScheduleSettings,
   formatHourLabel,
 } = require("./schedule-settings");
+const {
+  isWithinActiveWindowTz,
+  normalizeToActiveWindowTz,
+} = require("./lib/schedule-timezone");
 const {
   SOURCE_TIER_CHECK_INTERVALS,
   clampTier,
@@ -491,31 +496,11 @@ async function listSources(limit = 50) {
 }
 
 function isWithinActiveWindow(date, scheduleSettings) {
-  const h = date.getHours();
-  const start = scheduleSettings.activeStartHour;
-  const end = scheduleSettings.activeEndHour;
-
-  if (start === end) return true;
-  if (start < end) return h >= start && h < end;
-  return h >= start || h < end;
-}
-
-function nextActiveStart(scheduleSettings, fromDate = new Date()) {
-  const d = new Date(fromDate);
-  const next = new Date(d);
-  next.setSeconds(0, 0);
-  next.setHours(scheduleSettings.activeStartHour, 0, 0, 0);
-
-  if (d.getTime() >= next.getTime()) {
-    next.setDate(next.getDate() + 1);
-  }
-  return next;
+  return isWithinActiveWindowTz(scheduleSettings, date);
 }
 
 function normalizeToActiveWindow(date, scheduleSettings) {
-  const d = new Date(date);
-  if (isWithinActiveWindow(d, scheduleSettings)) return d;
-  return nextActiveStart(scheduleSettings, d);
+  return normalizeToActiveWindowTz(scheduleSettings, date);
 }
 
 function maxDate(a, b) {
@@ -724,7 +709,8 @@ async function loadDraftFull(draftId) {
 }
 
 function buildFinalTextFromDraft(draft) {
-  const comment = draft.use_comment === true ? draft.comment_tr : "";
+  const useComment = draft.use_comment !== false;
+  const comment = useComment ? draft.comment_tr : "";
   return composeDraftText(
     comment,
     draft.translation_tr,
@@ -918,7 +904,8 @@ async function getDashboardStats(scheduleSettingsArg) {
 app.get("/health", (req, res) =>
   res.json({
     ok: true,
-    posterWorkerRunning: !!posterWorkerChild,
+    posterWorkerRunning: !!posterWorkerChild || posterWorkerInlineActive,
+    posterWorkerInline: posterWorkerInlineActive,
     posterWorkerRestartCount,
   })
 );
@@ -945,7 +932,8 @@ app.get("/debug-counts", async (req, res) => {
       serverNow: now.toISOString(),
       serverNowTR: now.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }),
       TZ: process.env.TZ || "(not set)",
-      posterWorkerRunning: !!posterWorkerChild,
+      posterWorkerRunning: !!posterWorkerChild || posterWorkerInlineActive,
+      posterWorkerInline: posterWorkerInlineActive,
       posterWorkerRestartCount,
       waitingJobs: queueR.rows.map((row) => ({
         ...row,
@@ -2543,6 +2531,8 @@ app.get("/history", async (req, res) => {
 });
 
 let posterWorkerChild = null;
+/** poster-worker.js ayni Node process icinde (XAUTO_INLINE_POSTER_WORKER) */
+let posterWorkerInlineActive = false;
 let followWorkerChild = null;
 let replyPosterChild = null;
 let collectorRunning = false;
@@ -2604,6 +2594,23 @@ function startPosterWorker() {
     console.log("Poster worker atlanıyor (XAUTO_SKIP_POSTER_WORKER=true)");
     return;
   }
+  if (process.env.XAUTO_INLINE_POSTER_WORKER === "true") {
+    console.log(
+      "Poster worker: inline mod (XAUTO_INLINE_POSTER_WORKER=true). Kuyruk bu process'te islenir; ayri `node poster-worker.js` calistirmayin."
+    );
+    posterWorkerInlineActive = true;
+    try {
+      const { runPosterLoop } = require("./poster-worker");
+      runPosterLoop({ exitOnLockFail: false }).catch((e) => {
+        console.error("❌ Inline poster worker:", e?.message || e);
+        posterWorkerInlineActive = false;
+      });
+    } catch (e) {
+      console.error("❌ Inline poster worker yuklenemedi:", e?.message || e);
+      posterWorkerInlineActive = false;
+    }
+    return;
+  }
   const workerPath = path.join(__dirname, "poster-worker.js");
   posterWorkerChild = spawn(process.execPath, [workerPath], {
     stdio: "inherit",
@@ -2620,7 +2627,9 @@ function startPosterWorker() {
     }
     // code=2: lock alınamadı (başka instance çalışıyor) – yeniden başlatma
     if (code === 2) {
-      console.log("Poster worker lock alamadı (başka instance var). Yeniden başlatılmıyor.");
+      console.log(
+        "Poster worker lock alamadi (baska poster-worker veya inline mod aktif). Yeniden baslatilmiyor. Tek instance icin: ayri worker durdurun veya sunucuda XAUTO_INLINE_POSTER_WORKER=true kullanin."
+      );
       return;
     }
     // SIGTERM/SIGINT: graceful shutdown – yeniden başlatma

@@ -1,7 +1,7 @@
 /**
  * poster-worker.js (PRO - SAFE + SINGLETON)
  * - Queue'dan zamanı gelen 1 işi alır (SKIP LOCKED)
- * - AKTİF SAATLER: 06:00 - 01:00 (TR) dışında post atmaz
+ * - AKTİF SAATLER: 06:00 - 01:00 (Europe/Istanbul) disinda post atmaz
  * - MIN ARALIK: 57 dakika dolmadan yeni post atmaz (history + local cooldown)
  * - TEK WORKER KİLİDİ: pg_advisory_lock ile aynı anda 2 worker çalışamaz
  * - X'e post atar (OAuth2 user token veya OAuth1a)
@@ -30,6 +30,11 @@ const {
   getScheduleSettings,
   formatHourLabel,
 } = require("./schedule-settings");
+const {
+  isWithinActiveWindowTz,
+  minutesUntilNextActiveWindowTz,
+  POSTER_SCHEDULE_TZ,
+} = require("./lib/schedule-timezone");
 
 const API_BASE = process.env.X_API_BASE || "https://api.twitter.com";
 
@@ -63,6 +68,9 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
+
+/** pg_advisory_lock tutan oturum — release edilmez; kilidin surekli kalmasi icin referans tutulmali */
+let advisoryLockSession = null;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -131,29 +139,6 @@ function hasOAuth1a() {
   );
 }
 
-function isWithinActiveWindow(scheduleSettings, d = new Date()) {
-  const h = d.getHours();
-  const start = scheduleSettings.activeStartHour;
-  const end = scheduleSettings.activeEndHour;
-
-  if (start === end) return true; // 24 saat
-
-  if (start < end) return h >= start && h < end;
-  return h >= start || h < end; // wrap
-}
-
-function minutesUntilNextActive(scheduleSettings, d = new Date()) {
-  const start = scheduleSettings.activeStartHour;
-  const now = new Date(d);
-
-  const next = new Date(now);
-  next.setSeconds(0, 0);
-  next.setHours(start, 0, 0, 0);
-
-  if (now.getTime() >= next.getTime()) next.setDate(next.getDate() + 1);
-  return Math.ceil((next.getTime() - now.getTime()) / 60000);
-}
-
 async function getLastPostedAtFromDb() {
   const r = await pool.query(
     `SELECT posted_at FROM history ORDER BY posted_at DESC LIMIT 1`
@@ -169,11 +154,11 @@ async function ensureCooldownAndWindow() {
   const scheduleSettings = await getScheduleSettings(pool);
   const now = new Date();
 
-  // 1) aktif pencere
-  if (!isWithinActiveWindow(scheduleSettings, now)) {
-    const mins = minutesUntilNextActive(scheduleSettings, now);
+  // 1) aktif pencere (TR saati — sunucu TZ'den bagimsiz)
+  if (!isWithinActiveWindowTz(scheduleSettings, now)) {
+    const mins = minutesUntilNextActiveWindowTz(scheduleSettings, now);
     console.log(
-      `⏸️ Aktif saat dışında. Sonraki aktif başlangıca ~${mins} dk. (start=${formatHourLabel(
+      `⏸️ Aktif saat disinda (${POSTER_SCHEDULE_TZ}). Sonraki baslangica ~${mins} dk. (start=${formatHourLabel(
         scheduleSettings.activeStartHour
       )})`
     );
@@ -374,7 +359,8 @@ async function loadDraft(draftId) {
 }
 
 function composeFinalText(draft) {
-  const comment = draft.use_comment === true ? draft.comment_tr : "";
+  const useComment = draft.use_comment !== false;
+  const comment = useComment ? draft.comment_tr : "";
   return composeDraftText(
     comment,
     draft.translation_tr,
@@ -551,8 +537,14 @@ const LOCK_KEY = 909090;
 const LOCK_MAX_RETRIES = 15;
 const LOCK_RETRY_DELAY_MS = 10000;
 
-async function acquireSingletonLock() {
-  for (let attempt = 1; attempt <= LOCK_MAX_RETRIES; attempt++) {
+/**
+ * @param {{ exitOnLockFail?: boolean }} [options] exitOnLockFail=false: server inline modda sonsuz bekle
+ */
+async function acquireSingletonLock(options = {}) {
+  const exitOnLockFail = options.exitOnLockFail !== false;
+  let attempt = 0;
+  while (true) {
+    attempt += 1;
     const client = await pool.connect();
     try {
       const r = await client.query(`SELECT pg_try_advisory_lock($1) AS ok`, [LOCK_KEY]);
@@ -564,23 +556,27 @@ async function acquireSingletonLock() {
       }
 
       client.release();
-      if (attempt < LOCK_MAX_RETRIES) {
-        console.log(
-          `⏳ Lock alınamadı (deploy sonrası olabilir). ${LOCK_RETRY_DELAY_MS / 1000}s sonra tekrar (${attempt}/${LOCK_MAX_RETRIES})`
-        );
-        await sleep(LOCK_RETRY_DELAY_MS);
+      if (exitOnLockFail && attempt >= LOCK_MAX_RETRIES) {
+        console.error("❌ Başka bir poster-worker zaten çalışıyor (advisory lock alınamadı). Çıkıyorum.");
+        process.exit(2);
       }
+      console.log(
+        `⏳ Lock alınamadı (deploy / ikinci process olabilir). ${LOCK_RETRY_DELAY_MS / 1000}s sonra tekrar (${attempt}${
+          exitOnLockFail ? `/${LOCK_MAX_RETRIES}` : ", inline sonsuz deneme"
+        })`
+      );
+      await sleep(LOCK_RETRY_DELAY_MS);
     } catch (e) {
       client.release();
       throw e;
     }
   }
-
-  console.error("❌ Başka bir poster-worker zaten çalışıyor (advisory lock alınamadı). Çıkıyorum.");
-  process.exit(2);
 }
 
-async function main() {
+/**
+ * @param {{ exitOnLockFail?: boolean }} [options]
+ */
+async function runPosterLoop(options = {}) {
   await ensureScheduleSettingsTable(pool);
   const scheduleSettings = await getScheduleSettings(pool);
   console.log("🚀 Poster Worker başladı");
@@ -591,7 +587,7 @@ async function main() {
       scheduleSettings.activeStartHour
     )}-${formatHourLabel(
       scheduleSettings.activeEndHour
-    )} | minInterval=${intervalText}`
+    )} tz=${POSTER_SCHEDULE_TZ} | minInterval=${intervalText}`
   );
 
   if (!hasOAuth1a() && !hasOAuth2UserToken()) {
@@ -602,8 +598,9 @@ async function main() {
     console.log("✅ Post auth: Bearer (OAuth 2.0 User Context gerekli, App-Only yetmez)");
   }
 
-  // ✅ lock
-  await acquireSingletonLock();
+  advisoryLockSession = await acquireSingletonLock({
+    exitOnLockFail: options.exitOnLockFail !== false,
+  });
 
   while (true) {
     try {
@@ -621,7 +618,15 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error("❌ Fatal:", e);
-  process.exit(1);
-});
+async function main() {
+  await runPosterLoop({ exitOnLockFail: true });
+}
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error("❌ Fatal:", e);
+    process.exit(1);
+  });
+}
+
+module.exports = { runPosterLoop };
