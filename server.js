@@ -44,6 +44,10 @@ const {
   normalizeToActiveWindowTz,
 } = require("./lib/schedule-timezone");
 const {
+  getSchedulingAnchor,
+  rescheduleWaitingQueue,
+} = require("./lib/waiting-queue-reschedule");
+const {
   SOURCE_TIER_CHECK_INTERVALS,
   clampTier,
   computeNextCheckAt,
@@ -503,66 +507,6 @@ function normalizeToActiveWindow(date, scheduleSettings) {
   return normalizeToActiveWindowTz(scheduleSettings, date);
 }
 
-function maxDate(a, b) {
-  return new Date(Math.max(new Date(a).getTime(), new Date(b).getTime()));
-}
-
-async function getSchedulingAnchor(scheduleSettingsArg) {
-  const scheduleSettings = scheduleSettingsArg || (await getScheduleSettings(pool));
-  const now = new Date();
-
-  const anchorQ = await pool.query(`
-    SELECT scheduled_at
-    FROM queue
-    WHERE status IN ('processing','done')
-    ORDER BY scheduled_at DESC
-    LIMIT 1
-  `);
-
-  if (anchorQ.rowCount === 0) {
-    return normalizeToActiveWindow(now, scheduleSettings);
-  }
-
-  const anchor = new Date(anchorQ.rows[0].scheduled_at);
-  // Gelecekteki anchor'ları engelle (hatalı veri / önceki bug)
-  const effectiveAnchor = anchor.getTime() > now.getTime() ? now : anchor;
-  const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
-  const firstInterval = getIntervalForSlot(intervals, 0);
-  const next = new Date(
-    effectiveAnchor.getTime() + firstInterval * 60 * 1000
-  );
-  return normalizeToActiveWindow(maxDate(next, now), scheduleSettings);
-}
-
-async function rescheduleWaitingQueue(scheduleSettingsArg) {
-  const scheduleSettings = scheduleSettingsArg || (await getScheduleSettings(pool));
-  const waitingQ = await pool.query(`
-    SELECT id, draft_id, scheduled_at
-    FROM queue
-    WHERE status = 'waiting'
-    ORDER BY scheduled_at ASC, id ASC
-  `);
-
-  if (waitingQ.rowCount === 0) return 0;
-
-  let slot = await getSchedulingAnchor(scheduleSettings);
-  const intervals = scheduleSettings.postIntervalMinutes ?? [scheduleSettings.minPostIntervalMinutes];
-
-  for (let i = 0; i < waitingQ.rows.length; i++) {
-    const row = waitingQ.rows[i];
-    await pool.query(
-      `UPDATE queue SET scheduled_at=$2, updated_at=NOW() WHERE id=$1`,
-      [row.id, slot]
-    );
-
-    const nextInterval = getIntervalForSlot(intervals, i + 1);
-    slot = new Date(slot.getTime() + nextInterval * 60 * 1000);
-    slot = normalizeToActiveWindow(slot, scheduleSettings);
-  }
-
-  return waitingQ.rowCount;
-}
-
 /** Sadece okuma - reschedule YAPMAZ. Dashboard/gösterim için. */
 async function getNextSlotForDisplay(scheduleSettingsArg) {
   const scheduleSettings = scheduleSettingsArg || (await getScheduleSettings(pool));
@@ -585,12 +529,12 @@ async function getNextSlotForDisplay(scheduleSettingsArg) {
     );
     return normalizeToActiveWindow(next, scheduleSettings);
   }
-  return await getSchedulingAnchor(scheduleSettings);
+  return await getSchedulingAnchor(pool, scheduleSettings);
 }
 
 async function computeNextScheduleAt(scheduleSettingsArg) {
   const scheduleSettings = scheduleSettingsArg || (await getScheduleSettings(pool));
-  await rescheduleWaitingQueue(scheduleSettings);
+  await rescheduleWaitingQueue(pool, scheduleSettings);
 
   const lastWaiting = await pool.query(`
     SELECT scheduled_at
@@ -601,7 +545,7 @@ async function computeNextScheduleAt(scheduleSettingsArg) {
   `);
 
   if (lastWaiting.rowCount === 0) {
-    return await getSchedulingAnchor(scheduleSettings);
+    return await getSchedulingAnchor(pool, scheduleSettings);
   }
 
   const waitingCount = await pool.query(
@@ -640,7 +584,7 @@ async function enqueueDraft(draftId) {
     [draftId, scheduledAt]
   );
 
-  await rescheduleWaitingQueue();
+  await rescheduleWaitingQueue(pool);
 
   const q = await pool.query(
     `SELECT scheduled_at, status FROM queue WHERE draft_id=$1 ORDER BY id DESC LIMIT 1`,
@@ -685,7 +629,7 @@ async function cancelQueueItem(queueId) {
     ]);
   }
 
-  const rescheduledCount = await rescheduleWaitingQueue();
+  const rescheduledCount = await rescheduleWaitingQueue(pool);
   return { ok: true, draftId: item.draft_id, rescheduledCount };
 }
 
@@ -812,7 +756,7 @@ async function directPostDraftNow(draftId) {
     client.release();
   }
 
-  await rescheduleWaitingQueue();
+  await rescheduleWaitingQueue(pool);
 
   return {
     xPostId: xId,
@@ -1233,7 +1177,7 @@ app.post("/sources/remove-failed", async (req, res) => {
 app.post("/schedule-settings", async (req, res) => {
   try {
     const scheduleSettings = await updateScheduleSettings(pool, req.body || {});
-    const rescheduledCount = await rescheduleWaitingQueue(scheduleSettings);
+    const rescheduledCount = await rescheduleWaitingQueue(pool, scheduleSettings);
     const dashboard = await getDashboardStats(scheduleSettings);
     res.json({
       ok: true,

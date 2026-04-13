@@ -496,6 +496,16 @@ async function tickOnce() {
     // ✅ local cooldown'u anında güncelle (DB'yi beklemeden)
     lastPostedAtLocal = new Date();
 
+    try {
+      const { rescheduleWaitingQueue } = require("./lib/waiting-queue-reschedule");
+      const n = await rescheduleWaitingQueue(pool);
+      if (n > 0) {
+        console.log(`📅 Kuyruk yeniden zamanlandi (history + min aralik): ${n} waiting`);
+      }
+    } catch (reErr) {
+      console.warn("rescheduleWaitingQueue:", reErr?.message || reErr);
+    }
+
     console.log(
       `✅ Posted draft_id=${draftId} x_post_id=${xId || "?"} media=${
         uploadedMedia?.type || "none"
